@@ -1,0 +1,8 @@
+(marnus - yeah)
+TO-DO LIST
+
+- One Liner page must be expanded to include full verses
+- Export to an actual usable site
+- Animations can be improved 
+- Add a feature to import lines locally via other methods 
+- Check if styling conforms to phone usage (CHECKED)

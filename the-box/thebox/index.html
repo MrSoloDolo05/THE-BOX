@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>THE BOX</title>
+
+    <link
+        rel="stylesheet"
+        href="css/style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+    <!-- =====================================================
+         INTRO
+    ====================================================== -->
+
+    <section id="intro" class="intro">
+
+        <div class="intro-content">
+
+            <div class="box-line box-top"></div>
+
+            <div class="box-line box-bottom"></div>
+
+            <div class="box-line box-left"></div>
+
+            <div class="box-line box-right"></div>
+
+            <div class="intro-title">
+                THE BOX
+            </div>
+
+            <div class="tagline">
+                THINK OUTSIDE OF IT
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- =====================================================
+         APP
+    ====================================================== -->
+
+    <div id="app">
+
+        <div class="app-background"></div>
+
+        <div class="app">
+
+
+            <!-- =================================================
+                 SIDEBAR
+            ================================================== -->
+
+            <aside class="sidebar">
+
+                <div class="brand">
+                    THE BOX
+                </div>
+
+                <div class="brand-tagline">
+                    THINK OUTSIDE OF IT
+                </div>
+
+                <div class="nav-label">
+                    WORKSPACE
+                </div>
+
+                <nav class="nav">
+
+                    <button
+                        class="nav-button active"
+                        data-view="crate"
+                        type="button"
+                    >
+                        CRATE
+                    </button>
+
+                    <button
+                        class="nav-button"
+                        data-view="liners"
+                        type="button"
+                    >
+                        ONE LINERS
+                    </button>
+
+                    <button
+                        class="nav-button"
+                        data-view="redroom"
+                        type="button"
+                    >
+                        RED ROOM
+                    </button>
+
+                    <button
+                        class="nav-button"
+                        data-view="search"
+                        type="button"
+                    >
+                        SEARCH
+                    </button>
+
+                    <button
+                        class="nav-button"
+                        data-view="trash"
+                        type="button"
+                    >
+                        TRASH
+                    </button>
+
+                </nav>
+
+                <div class="sidebar-bottom">
+
+                    <div
+                        id="save-status"
+                        class="save-status"
+                    >
+                        SAVED
+                    </div>
+
+                    <div class="database-actions">
+
+                        <button
+                            id="export-button"
+                            type="button"
+                            title="Download a backup of everything"
+                        >
+                            EXPORT
+                        </button>
+
+                        <button
+                            id="import-button"
+                            type="button"
+                            title="Load a backup / exported file"
+                        >
+                            IMPORT
+                        </button>
+
+                        <button
+                            id="clear-button"
+                            type="button"
+                            title="Delete everything and start fresh"
+                        >
+                            CLEAR
+                        </button>
+
+                        <input
+                            id="import-file"
+                            type="file"
+                            accept="application/json,.json"
+                            hidden
+                        >
+
+                    </div>
+
+                </div>
+
+            </aside>
+
+
+
+            <!-- =================================================
+                 MAIN
+            ================================================== -->
+
+            <main class="main">
+
+
+                <!-- TOP BAR -->
+
+                <header class="topbar">
+
+                    <button
+                        id="mobile-menu"
+                        class="mobile-menu"
+                        type="button"
+                    >
+                        ☰
+                    </button>
+
+                    <div
+                        id="page-title"
+                        class="page-title"
+                    >
+                        CRATE
+                    </div>
+
+                    <div class="top-actions">
+
+                        <button
+                            id="tools-button"
+                            class="small-btn"
+                            type="button"
+                        >
+                            TOOLS
+                        </button>
+
+                    </div>
+
+                </header>
+
+
+
+                <!-- CONTENT -->
+
+                <div class="content">
+
+
+                    <!-- =================================================
+                         CRATE VIEW
+                    ================================================== -->
+
+                    <section
+                        id="view-crate"
+                        class="view active"
+                        data-view="crate"
+                    >
+
+                        <div class="hero">
+
+                            <div class="eyebrow">
+                                THE CRATE
+                            </div>
+
+                            <h1>
+                                Your songs.
+                            </h1>
+
+                            <p>
+                                A private workspace for collecting,
+                                developing and finishing your ideas.
+                            </p>
+
+                        </div>
+
+
+                        <div class="section-header">
+
+                            <h2>
+                                FOLDERS
+                            </h2>
+
+                            <button
+                                id="create-folder-button"
+                                class="small-btn"
+                                type="button"
+                            >
+                                + FOLDER
+                            </button>
+
+                        </div>
+
+
+                        <div
+                            id="folder-grid"
+                            class="folder-grid"
+                        ></div>
+
+
+                        <div class="section-header">
+
+                            <h2>
+                                SONGS
+                            </h2>
+
+                        </div>
+
+
+                        <div
+                            id="song-list"
+                            class="song-list"
+                        ></div>
+
+                    </section>
+
+
+
+                    <!-- =================================================
+                         FOLDER DETAIL
+                    ================================================== -->
+
+                    <section
+                        id="view-folder"
+                        class="view"
+                        data-view="folder"
+                    >
+
+                        <div class="folder-detail-head">
+
+                            <button
+                                id="folder-back-button"
+                                class="back-btn"
+                                type="button"
+                            >
+                                ← BACK
+                            </button>
+
+                            <div
+                                id="folder-detail-title"
+                                class="folder-detail-title"
+                            >
+                                Folder
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            id="folder-song-list"
+                            class="song-list"
+                        ></div>
+
+                    </section>
+
+
+
+                    <!-- =================================================
+                         ONE LINERS
+                    ================================================== -->
+
+                    <section
+                        id="view-liners"
+                        class="view"
+                        data-view="liners"
+                    >
+
+                        <div class="hero">
+
+                            <div class="eyebrow">
+                                ONE LINERS
+                            </div>
+
+                            <h1>
+                                Keep the good lines.
+                            </h1>
+
+                            <p>
+                                Capture phrases, hooks and ideas before
+                                they disappear.
+                            </p>
+
+                        </div>
+
+
+                        <div class="add-liner">
+
+                            <input
+                                id="liner-input"
+                                type="text"
+                                placeholder="Write a line..."
+                            >
+
+                            <button
+                                id="add-liner-button"
+                                class="small-btn"
+                                type="button"
+                            >
+                                ADD
+                            </button>
+
+                        </div>
+
+
+                        <div class="liner-controls">
+
+                            <button
+                                class="filter-btn active"
+                                data-filter="all"
+                                type="button"
+                            >
+                                ALL
+                            </button>
+
+                            <button
+                                class="filter-btn"
+                                data-filter="unused"
+                                type="button"
+                            >
+                                UNUSED
+                            </button>
+
+                            <button
+                                class="filter-btn"
+                                data-filter="used"
+                                type="button"
+                            >
+                                USED
+                            </button>
+
+                        </div>
+
+
+                        <div
+                            id="liner-list"
+                            class="liner-list"
+                        ></div>
+
+                    </section>
+
+
+
+                    <!-- =================================================
+                         RED ROOM
+                    ================================================== -->
+
+                    <section
+                        id="view-redroom"
+                        class="view"
+                        data-view="redroom"
+                    >
+
+                        <div class="redroom-header">
+
+                            <button
+                                id="redroom-back-button"
+                                class="back-btn"
+                                type="button"
+                                title="Back to the crate"
+                            >
+                                ← BACK
+                            </button>
+
+                            <input
+                                id="song-title"
+                                class="song-title-input"
+                                type="text"
+                                placeholder="Untitled song"
+                            >
+
+                            <div class="song-meta">
+
+                                <span id="song-meta-date">
+                                    CREATED
+                                </span>
+
+                                <span
+                                    id="song-meta-status"
+                                    class="song-meta-status"
+                                >
+                                    DRAFT
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            id="song-sections"
+                            class="sections"
+                        ></div>
+
+
+                        <div class="red-actions">
+
+                            <button
+                                id="new-song-button"
+                                class="red-button"
+                                type="button"
+                                title="Start a brand new song"
+                            >
+                                NEW SONG
+                            </button>
+
+                            <button
+                                id="add-section-button"
+                                class="red-button"
+                                type="button"
+                            >
+                                + SECTION
+                            </button>
+
+                            <div class="template-button-wrap">
+
+                                <button
+                                    id="template-button"
+                                    class="red-button"
+                                    type="button"
+                                >
+                                    TEMPLATES
+                                </button>
+
+
+                                <!-- SECTION TEMPLATE MENU -->
+
+                                <div
+                                    id="template-menu"
+                                    class="template-menu"
+                                >
+
+                                    <button data-template="verse">
+                                        VERSE
+                                    </button>
+
+                                    <button data-template="chorus">
+                                        CHORUS
+                                    </button>
+
+                                    <button data-template="prechorus">
+                                        PRE-CHORUS
+                                    </button>
+
+                                    <button data-template="bridge">
+                                        BRIDGE
+                                    </button>
+
+                                    <button data-template="intro">
+                                        INTRO
+                                    </button>
+
+                                    <button data-template="outro">
+                                        OUTRO
+                                    </button>
+
+                                    <button
+                                        class="custom"
+                                        data-template="custom"
+                                    >
+                                        CUSTOM
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                            <button
+                                id="save-song-button"
+                                class="red-button"
+                                type="button"
+                            >
+                                SAVE &amp; EXIT
+                            </button>
+
+                        </div>
+
+                    </section>
+
+
+
+                    <!-- =================================================
+                         SEARCH
+                    ================================================== -->
+
+                    <section
+                        id="view-search"
+                        class="view"
+                        data-view="search"
+                    >
+
+                        <div class="search-shell">
+
+                            <div class="hero">
+
+                                <div class="eyebrow">
+                                    SEARCH
+                                </div>
+
+                                <h1>
+                                    Find anything.
+                                </h1>
+
+                            </div>
+
+
+                            <div class="search-input-wrap">
+
+                                <span class="search-icon">
+                                    /
+                                </span>
+
+                                <input
+                                    id="search-box"
+                                    class="search-box"
+                                    type="search"
+                                    placeholder="Search songs, lyrics, liners..."
+                                >
+
+                            </div>
+
+
+                            <div
+                                id="search-results"
+                                class="search-results"
+                            ></div>
+
+                        </div>
+
+                    </section>
+
+
+
+                    <!-- =================================================
+                         TRASH
+                    ================================================== -->
+
+                    <section
+                        id="view-trash"
+                        class="view"
+                        data-view="trash"
+                    >
+
+                        <div class="trash-intro">
+
+                            <div class="hero">
+
+                                <div class="eyebrow">
+                                    TRASH
+                                </div>
+
+                                <h1>
+                                    Deleted things.
+                                </h1>
+
+                                <p>
+                                    Items remain here until you decide
+                                    what to do with them.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            id="trash-list"
+                            class="trash-list"
+                        ></div>
+
+                    </section>
+
+
+                </div>
+
+            </main>
+
+
+
+            <!-- =================================================
+                 TOOLS PANEL
+            ================================================== -->
+
+            <aside
+                id="tools"
+                class="tools"
+            >
+
+                <div class="tool-tabs">
+
+                    <button
+                        class="tool-tab active"
+                        data-tool="rhymes"
+                        type="button"
+                    >
+                        RHYMES
+                    </button>
+
+                    <button
+                        class="tool-tab"
+                        data-tool="ideas"
+                        type="button"
+                    >
+                        IDEAS
+                    </button>
+
+                    <button
+                        id="tools-close"
+                        class="tools-close"
+                        type="button"
+                        title="Close"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+
+                <!-- RHYMES -->
+
+                <div
+                    id="tool-rhymes"
+                    class="tool-panel active"
+                >
+
+                    <div class="tool-heading">
+                        Rhymes
+                    </div>
+
+                    <div class="tool-description">
+                        Find words and sounds to work with.
+                    </div>
+
+                    <input
+                        id="rhyme-input"
+                        class="tool-input"
+                        type="text"
+                        placeholder="Enter a word..."
+                    >
+
+                    <div
+                        id="rhyme-results"
+                        class="tool-results"
+                    ></div>
+
+                </div>
+
+
+
+                <!-- IDEAS -->
+
+                <div
+                    id="tool-ideas"
+                    class="tool-panel"
+                >
+
+                    <div class="tool-heading">
+                        Ideas
+                    </div>
+
+                    <div class="tool-description">
+                        Generate prompts to push the song somewhere new.
+                    </div>
+
+                    <div class="idea-actions">
+
+                        <button
+                            data-idea="themes"
+                            type="button"
+                        >
+                            Explore themes
+                        </button>
+
+                        <button
+                            data-idea="imagery"
+                            type="button"
+                        >
+                            Find imagery
+                        </button>
+
+                        <button
+                            data-idea="metaphors"
+                            type="button"
+                        >
+                            Try a metaphor
+                        </button>
+
+                        <button
+                            data-idea="contrast"
+                            type="button"
+                        >
+                            Use contrast
+                        </button>
+
+                        <button
+                            data-idea="questions"
+                            type="button"
+                        >
+                            Ask a question
+                        </button>
+
+                        <button
+                            data-idea="unstuck"
+                            type="button"
+                        >
+                            Get unstuck
+                        </button>
+
+                    </div>
+
+                    <div
+                        id="idea-output"
+                        class="idea-output"
+                    ></div>
+
+                </div>
+
+            </aside>
+
+
+
+            <!-- =================================================
+                 MODAL
+            ================================================== -->
+
+            <div
+                id="modal-overlay"
+                class="modal-overlay"
+            >
+
+                <div class="modal">
+
+                    <h3 id="modal-title">
+                        Create
+                    </h3>
+
+                    <div id="modal-body"></div>
+
+                    <div class="modal-actions">
+
+                        <button
+                            id="modal-cancel"
+                            type="button"
+                        >
+                            CANCEL
+                        </button>
+
+                        <button
+                            id="modal-confirm"
+                            class="primary"
+                            type="button"
+                        >
+                            CONFIRM
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         JAVASCRIPT
+    ====================================================== -->
+
+    <script src="js/state.js"></script>
+
+    <script src="js/database.js"></script>
+
+    <script src="js/crate.js"></script>
+
+    <script src="js/one-liners.js"></script>
+
+    <script src="js/red-room.js"></script>
+
+    <script src="js/tools.js"></script>
+
+    <script src="js/app.js"></script>
+
+
+</body>
+
+</html>

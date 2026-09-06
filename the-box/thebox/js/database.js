@@ -6,8 +6,6 @@ const DATABASE_KEY = "the_box_app_state";
 
 const UI_STATE_KEY = "the_box_ui_state";
 
-const INTRO_SEEN_KEY = "the_box_intro_seen";
-
 
 /* =========================================================
    UI STATE (current view, persisted across refreshes)
@@ -62,46 +60,6 @@ function loadUIState() {
 
 
 /* =========================================================
-   INTRO SEEN FLAG
-========================================================= */
-
-function markIntroSeen() {
-
-    try {
-
-        localStorage.setItem(
-            INTRO_SEEN_KEY,
-            "1"
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Could not save intro state:",
-            error
-        );
-    }
-}
-
-
-function hasSeenIntro() {
-
-    try {
-
-        return (
-            localStorage.getItem(
-                INTRO_SEEN_KEY
-            ) === "1"
-        );
-
-    } catch (error) {
-
-        return false;
-    }
-}
-
-
-/* =========================================================
    DEFAULT STATE
 ========================================================= */
 
@@ -117,6 +75,8 @@ function createDefaultState() {
         ],
 
         liners: [],
+
+        verses: [],
 
         trash: []
     };
@@ -139,6 +99,18 @@ function saveState() {
 
         if (saveStatus) {
             saveStatus.textContent = "SAVED";
+        }
+
+        /* Fire-and-forget cloud sync when signed in. */
+        if (
+            typeof isSignedIn === "function" &&
+            isSignedIn() &&
+            typeof pushState === "function"
+        ) {
+            clearTimeout(cloudPushTimer);
+            cloudPushTimer = setTimeout(() => {
+                pushState();
+            }, 500);
         }
 
     } catch (error) {
@@ -179,6 +151,10 @@ function loadState() {
 
             liners: Array.isArray(parsed.liners)
                 ? parsed.liners
+                : [],
+
+            verses: Array.isArray(parsed.verses)
+                ? parsed.verses
                 : [],
 
             trash: Array.isArray(parsed.trash)
@@ -307,6 +283,33 @@ function loadState() {
         });
 
 
+        /* -------------------------------------------------
+           VERSE MIGRATION
+        ------------------------------------------------- */
+
+        state.verses.forEach(verse => {
+
+            if (!verse.id) {
+                verse.id = generateId();
+            }
+
+            if (
+                typeof verse.text !== "string"
+            ) {
+                verse.text = "";
+            }
+
+            if (!Array.isArray(verse.usedIn)) {
+                verse.usedIn = [];
+            }
+
+            if (!verse.created) {
+                verse.created =
+                    new Date().toISOString();
+            }
+        });
+
+
         saveState();
 
     } catch (error) {
@@ -424,6 +427,11 @@ function importDatabase(event) {
                 );
 
                 return;
+            }
+
+            /* Older backups may not have verses yet. */
+            if (!Array.isArray(imported.verses)) {
+                imported.verses = [];
             }
 
             state = imported;

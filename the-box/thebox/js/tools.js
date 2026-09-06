@@ -1209,6 +1209,47 @@ function performSearch(query) {
 
 
     /* -----------------------------------------------------
+       VERSES
+    ----------------------------------------------------- */
+
+    state.verses.forEach(
+        verse => {
+
+            const text =
+                String(
+                    verse.text || ""
+                );
+
+
+            if (
+                text
+                    .toLowerCase()
+                    .includes(query)
+            ) {
+
+                results.push({
+
+                    type:
+                        "VERSE",
+
+                    title:
+                        text,
+
+                    snippet:
+                        "VERSE",
+
+                    action:
+                        () =>
+                            showView(
+                                "liners"
+                            )
+                });
+            }
+        }
+    );
+
+
+    /* -----------------------------------------------------
        FOLDERS
     ----------------------------------------------------- */
 

@@ -13,6 +13,12 @@
 
     <title>THE BOX</title>
 
+    <meta name="description" content="A private songwriting workspace for collecting, developing and finishing your ideas.">
+
+    <meta name="theme-color" content="#070708">
+
+    <link rel="manifest" href="manifest.webmanifest">
+
     <link
         rel="stylesheet"
         href="css/style.css"
@@ -46,6 +52,23 @@
 
             <div class="tagline">
                 THINK OUTSIDE OF IT
+            </div>
+
+            <div class="intro-auth">
+                <button
+                    id="auth-button"
+                    class="auth-button"
+                    type="button"
+                    onclick="handleAuthClick()"
+                >
+                    SIGN IN WITH GOOGLE
+                </button>
+                <div
+                    id="sync-status"
+                    class="sync-status offline"
+                >
+                    OFFLINE
+                </div>
             </div>
 
         </div>
@@ -144,6 +167,14 @@
                             title="Download a backup of everything"
                         >
                             EXPORT
+                        </button>
+
+                        <button
+                            data-import-open
+                            type="button"
+                            title="Import lines, verses or a full song from text"
+                        >
+                            LINES+
                         </button>
 
                         <button
@@ -360,6 +391,37 @@
                         </div>
 
 
+                        <button
+                            id="liner-import-button"
+                            class="small-btn"
+                            data-import-open
+                            type="button"
+                        >
+                            IMPORT LINES
+                        </button>
+
+
+                        <div class="liner-tabs">
+
+                            <button
+                                class="liner-tab active"
+                                data-linerview="lines"
+                                type="button"
+                            >
+                                LINES
+                            </button>
+
+                            <button
+                                class="liner-tab"
+                                data-linerview="verses"
+                                type="button"
+                            >
+                                VERSES
+                            </button>
+
+                        </div>
+
+
                         <div class="add-liner">
 
                             <input
@@ -370,6 +432,24 @@
 
                             <button
                                 id="add-liner-button"
+                                class="small-btn"
+                                type="button"
+                            >
+                                ADD
+                            </button>
+
+                        </div>
+
+
+                        <div class="add-verse">
+
+                            <textarea
+                                id="verse-input"
+                                placeholder="Write a verse..."
+                            ></textarea>
+
+                            <button
+                                id="add-verse-button"
                                 class="small-btn"
                                 type="button"
                             >
@@ -411,6 +491,12 @@
                         <div
                             id="liner-list"
                             class="liner-list"
+                        ></div>
+
+                        <div
+                            id="verse-list"
+                            class="liner-list"
+                            style="display:none"
                         ></div>
 
                     </section>
@@ -639,6 +725,16 @@
                         </div>
 
 
+                        <button
+                            id="empty-trash-button"
+                            class="small-btn"
+                            type="button"
+                            style="margin-bottom:20px;"
+                        >
+                            EMPTY TRASH
+                        </button>
+
+
                         <div
                             id="trash-list"
                             class="trash-list"
@@ -847,6 +943,11 @@
          JAVASCRIPT
     ====================================================== -->
 
+    <!-- Firebase CDN (compat builds, no build tool needed) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
     <script src="js/state.js"></script>
 
     <script src="js/database.js"></script>
@@ -855,7 +956,11 @@
 
     <script src="js/one-liners.js"></script>
 
+    <script src="js/import.js"></script>
+
     <script src="js/red-room.js"></script>
+
+    <script src="js/sync.js"></script>
 
     <script src="js/tools.js"></script>
 

@@ -1,0 +1,17 @@
+{
+    "name": "THE BOX",
+    "short_name": "THE BOX",
+    "description": "A private songwriting workspace for collecting, developing and finishing your ideas.",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#070708",
+    "theme_color": "#070708",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23070708' stroke='%23f0eee9' stroke-width='3'/><text x='50' y='62' font-size='36' font-family='Manrope, sans-serif' font-weight='500' fill='%23f0eee9' text-anchor='middle' letter-spacing='8'>BOX</text></svg>",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

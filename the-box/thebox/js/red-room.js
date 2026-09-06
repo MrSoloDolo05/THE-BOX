@@ -189,6 +189,22 @@ function renderSections() {
 
                                     <button
                                         type="button"
+                                        onclick="moveSection('${section.id}', -1)"
+                                        title="Move up"
+                                    >
+                                        ↑
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onclick="moveSection('${section.id}', 1)"
+                                        title="Move down"
+                                    >
+                                        ↓
+                                    </button>
+
+                                    <button
+                                        type="button"
                                         onclick="deleteSection('${section.id}')"
                                         title="Delete section"
                                     >
@@ -206,6 +222,7 @@ function renderSections() {
                                 data-section-id="${section.id}"
                                 placeholder="Write here..."
                                 onfocus="setCurrentSection('${section.id}')"
+                                onblur="flushLyricsSave()"
                                 oninput="updateSectionLyrics('${section.id}', this.value)"
                             >${escapeHTML(
                                 section.lyrics
@@ -326,7 +343,32 @@ function updateSectionLyrics(
 
     touchSong(song);
 
-    saveState();
+
+    /* Debounce: wait for the writer to pause before
+       writing to localStorage, so we don't serialize
+       the whole state on every single keystroke. */
+    clearTimeout(lyricsSaveTimer);
+
+    lyricsSaveTimer =
+        setTimeout(
+            () => {
+                saveState();
+            },
+            400
+        );
+}
+
+
+function flushLyricsSave() {
+
+    if (lyricsSaveTimer) {
+
+        clearTimeout(lyricsSaveTimer);
+
+        lyricsSaveTimer = null;
+
+        saveState();
+    }
 }
 
 
@@ -482,6 +524,63 @@ function deleteSection(id) {
                 )
             ]?.id || null;
     }
+
+
+    touchSong(song);
+
+    saveState();
+
+    renderRedRoom();
+}
+
+
+/* =========================================================
+   MOVE SECTION (up / down)
+========================================================= */
+
+function moveSection(id, delta) {
+
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return;
+    }
+
+
+    const sections =
+        song.sections;
+
+    const index =
+        sections.findIndex(
+            section =>
+                section.id === id
+        );
+
+    if (index === -1) {
+        return;
+    }
+
+
+    const target =
+        index + delta;
+
+    if (
+        target < 0 ||
+        target >= sections.length
+    ) {
+        return;
+    }
+
+
+    const temp =
+        sections[index];
+
+    sections[index] =
+        sections[target];
+
+    sections[target] =
+        temp;
 
 
     touchSong(song);

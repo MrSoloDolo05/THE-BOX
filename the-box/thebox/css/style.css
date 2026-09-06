@@ -171,6 +171,72 @@ button {
     transform: scaleY(1);
 }
 
+.intro-auth {
+    position: absolute;
+
+    bottom: -135px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 10px;
+}
+
+.auth-button {
+    border: 1px solid var(--line);
+
+    background: transparent;
+
+    color: #888;
+
+    padding: 8px 18px;
+
+    font-size: 9px;
+
+    cursor: pointer;
+
+    letter-spacing: .08em;
+
+    transition: .2s ease;
+}
+
+.auth-button:hover {
+    color: white;
+
+    border-color: rgba(255,255,255,.3);
+}
+
+.auth-button.signed-in {
+    color: #6ee08a;
+
+    border-color: rgba(110,224,138,.3);
+}
+
+.sync-status {
+    font-family: "DM Mono", monospace;
+
+    font-size: 7px;
+
+    letter-spacing: .1em;
+
+    color: #555;
+}
+
+.sync-status.synced {
+    color: #6ee08a;
+}
+
+.sync-status.syncing {
+    color: #c9a227;
+}
+
+.sync-status.error {
+    color: #c06a6a;
+}
+
 .tagline {
     position: absolute;
 
@@ -1020,6 +1086,266 @@ button {
 
 .add-liner input:focus {
     border-color: rgba(100,160,120,.5);
+}
+
+
+.liner-tabs {
+    display: flex;
+
+    gap: 6px;
+
+    margin-bottom: 30px;
+}
+
+.liner-tab {
+    border: 1px solid var(--line);
+
+    background: transparent;
+
+    color: #777;
+
+    padding: 8px 16px;
+
+    font-size: 10px;
+
+    cursor: pointer;
+}
+
+.liner-tab.active {
+    color: white;
+
+    background: rgba(255,255,255,.06);
+}
+
+.add-verse {
+    display: none;
+
+    flex-direction: column;
+
+    gap: 10px;
+
+    margin-bottom: 30px;
+}
+
+.add-verse textarea {
+    width: 100%;
+
+    min-height: 120px;
+
+    background: rgba(255,255,255,.025);
+
+    border: 1px solid var(--line);
+
+    padding: 14px;
+
+    color: white;
+
+    outline: none;
+
+    resize: vertical;
+
+    box-sizing: border-box;
+
+    line-height: 1.6;
+
+    font-size: 13px;
+
+    font-family: inherit;
+}
+
+.add-verse textarea:focus {
+    border-color: rgba(100,160,120,.5);
+}
+
+.add-verse .small-btn {
+    align-self: flex-end;
+}
+
+.verse-card {
+    background: rgba(35,60,90,.1);
+
+    border-color: rgba(80,120,170,.14);
+}
+
+.verse-card:hover {
+    border-color: rgba(100,150,220,.35);
+}
+
+.verse-text {
+    white-space: pre-wrap;
+
+    line-height: 1.7;
+}
+
+.picker-tabs {
+    display: flex;
+
+    gap: 6px;
+
+    margin-bottom: 12px;
+}
+
+.picker-tab {
+    flex: 1;
+
+    border: 1px solid var(--line);
+
+    background: transparent;
+
+    color: #777;
+
+    padding: 8px;
+
+    font-size: 9px;
+
+    cursor: pointer;
+}
+
+.picker-tab.active {
+    color: white;
+
+    background: rgba(255,255,255,.06);
+}
+
+.modal textarea.edit-modal-input {
+    width: 100%;
+
+    min-height: 160px;
+
+    background: rgba(255,255,255,.04);
+
+    border: 1px solid var(--line);
+
+    padding: 13px;
+
+    color: white;
+
+    outline: none;
+
+    resize: vertical;
+
+    box-sizing: border-box;
+
+    line-height: 1.6;
+
+    font-size: 13px;
+
+    font-family: inherit;
+}
+
+
+.import-modes {
+    display: flex;
+
+    gap: 6px;
+
+    margin-bottom: 14px;
+}
+
+.import-mode {
+    flex: 1;
+
+    border: 1px solid var(--line);
+
+    background: transparent;
+
+    color: #777;
+
+    padding: 8px;
+
+    font-size: 9px;
+
+    cursor: pointer;
+}
+
+.import-mode.active {
+    color: white;
+
+    background: rgba(255,255,255,.06);
+}
+
+.import-hint {
+    color: #76747a;
+
+    font-size: 11px;
+
+    line-height: 1.5;
+
+    margin: 0 0 14px;
+}
+
+.import-input {
+    width: 100%;
+
+    min-height: 140px;
+
+    background: rgba(255,255,255,.04);
+
+    border: 1px solid var(--line);
+
+    padding: 13px;
+
+    color: white;
+
+    outline: none;
+
+    resize: vertical;
+
+    box-sizing: border-box;
+
+    line-height: 1.6;
+
+    font-size: 13px;
+
+    font-family: inherit;
+}
+
+.import-zone {
+    margin-top: 12px;
+
+    padding: 18px;
+
+    border: 1px dashed rgba(255,255,255,.18);
+
+    color: #6a6a70;
+
+    text-align: center;
+
+    font-family: "DM Mono", monospace;
+
+    font-size: 8px;
+
+    letter-spacing: .08em;
+
+    cursor: pointer;
+
+    transition:
+        border-color .2s ease,
+        background .2s ease;
+}
+
+.import-zone.drag-over {
+    border-color: rgba(100,160,120,.6);
+
+    background: rgba(100,160,120,.06);
+
+    color: #bbb;
+}
+
+#import-browse {
+    margin-top: 8px;
+
+    width: 100%;
+}
+
+.import-result {
+    margin-top: 14px;
+
+    font-family: "DM Mono", monospace;
+
+    font-size: 9px;
+
+    line-height: 1.6;
 }
 
 
@@ -2171,6 +2497,16 @@ button {
         margin-left: 10px;
     }
 
+    .folder-actions {
+        opacity: 1;
+
+        position: absolute;
+
+        right: 8px;
+
+        top: 8px;
+    }
+
     .tools {
         width: 100%;
     }
@@ -2196,6 +2532,16 @@ button {
         width: 80vw;
     }
 
+    /* Prevent the auth button from clipping off small
+       phone screens now that it sits below the tagline. */
+    .intro-content {
+        height: 150px;
+    }
+
+    .intro-auth {
+        bottom: -115px;
+    }
+
     .template-menu {
         width:
             calc(100vw - 36px);
@@ -2219,5 +2565,17 @@ button {
 
     .song-title-input {
         font-size: 34px;
+    }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

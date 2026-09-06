@@ -199,6 +199,14 @@ function renderSongRow(
 
                 <button
                     type="button"
+                    onclick="event.stopPropagation(); openMoveSongModal('${song.id}')"
+                    title="Move to folder"
+                >
+                    ⇢
+                </button>
+
+                <button
+                    type="button"
                     onclick="event.stopPropagation(); duplicateSong('${song.id}')"
                     title="Duplicate"
                 >
@@ -603,6 +611,85 @@ function deleteSong(id) {
     renderCrate();
 
     renderTrash();
+}
+
+
+/* =========================================================
+   MOVE SONG TO FOLDER
+   (for touch devices where drag and drop does not work)
+========================================================= */
+
+function openMoveSongModal(songId) {
+
+    const modalTitle =
+        document.getElementById(
+            "modal-title"
+        );
+
+    const modalBody =
+        document.getElementById(
+            "modal-body"
+        );
+
+    if (!modalTitle || !modalBody) {
+        return;
+    }
+
+    modalTitle.textContent =
+        "MOVE SONG TO FOLDER";
+
+
+    modalBody.innerHTML = `
+        <div style="display:grid;gap:6px;">
+
+            ${state.folders.map(folder => `
+                <button
+                    type="button"
+                    onclick="moveSongToFolder('${songId}', '${folder.id}')"
+                    style="
+                        text-align:left;
+                        border:1px solid var(--line);
+                        background:rgba(255,255,255,.025);
+                        padding:14px;
+                        color:#bbb;
+                        cursor:pointer;
+                    "
+                >
+                    ${escapeHTML(folder.name)}
+                </button>
+            `).join("")}
+
+        </div>
+    `;
+
+
+    openModal();
+}
+
+
+function moveSongToFolder(songId, folderId) {
+
+    const song =
+        state.songs.find(
+            song =>
+                song.id === songId
+        );
+
+    if (!song) {
+        return;
+    }
+
+    song.folder = folderId;
+
+    touchSong(song);
+
+    saveState();
+
+    closeModal();
+
+    renderCrate();
+
+    renderFolderSongsIfNeeded();
 }
 
 
@@ -1149,6 +1236,14 @@ function restoreTrash(id) {
         state.liners.push(
             item.data
         );
+
+    } else if (
+        item.type === "verse"
+    ) {
+
+        state.verses.push(
+            item.data
+        );
     }
 
 
@@ -1178,6 +1273,24 @@ function permanentlyDelete(id) {
             item =>
                 item.id !== id
         );
+
+    saveState();
+
+    renderTrash();
+}
+
+
+/* =========================================================
+   EMPTY TRASH
+========================================================= */
+
+function emptyTrash() {
+
+    if (!state.trash.length) {
+        return;
+    }
+
+    state.trash = [];
 
     saveState();
 

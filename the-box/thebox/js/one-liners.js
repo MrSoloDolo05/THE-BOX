@@ -50,6 +50,52 @@ function addLiner() {
 
 
 /* =========================================================
+   ADD VERSE
+========================================================= */
+
+function addVerse() {
+
+    const input =
+        document.getElementById(
+            "verse-input"
+        );
+
+    if (!input) {
+        return;
+    }
+
+
+    const text =
+        input.value.trim();
+
+
+    if (!text) {
+        return;
+    }
+
+
+    state.verses.unshift({
+
+        id: generateId(),
+
+        text: text,
+
+        usedIn: [],
+
+        created:
+            new Date().toISOString()
+    });
+
+
+    input.value = "";
+
+    saveState();
+
+    renderLiners();
+}
+
+
+/* =========================================================
    LINER FILTER
 ========================================================= */
 
@@ -86,34 +132,118 @@ function setLinerFilter(
 
 
 /* =========================================================
+   LINER VIEW (LINES / VERSES TAB)
+========================================================= */
+
+function setLinerView(
+    view,
+    button
+) {
+
+    if (
+        view !== "lines" &&
+        view !== "verses"
+    ) {
+        return;
+    }
+
+
+    linerView = view;
+
+
+    document
+        .querySelectorAll(
+            ".liner-tab"
+        )
+        .forEach(btn => {
+
+            btn.classList.toggle(
+                "active",
+                btn.dataset.linerview ===
+                view
+            );
+        });
+
+
+    renderLiners();
+}
+
+
+/* =========================================================
    RENDER LINERS
 ========================================================= */
 
 function renderLiners() {
 
+    const isLines =
+        linerView === "lines";
+
+
     const container =
         document.getElementById(
-            "liner-list"
+            isLines
+                ? "liner-list"
+                : "verse-list"
         );
+
+    const linesInput =
+        document.querySelector(
+            ".add-liner"
+        );
+
+    const versesInput =
+        document.querySelector(
+            ".add-verse"
+        );
+
+    if (linesInput) {
+        linesInput.style.display =
+            isLines ? "" : "none";
+    }
+
+    if (versesInput) {
+        versesInput.style.display =
+            isLines ? "none" : "flex";
+    }
+
+    const otherContainer =
+        document.getElementById(
+            isLines
+                ? "verse-list"
+                : "liner-list"
+        );
+
+    if (otherContainer) {
+        otherContainer.style.display =
+            "none";
+    }
 
     if (!container) {
         return;
     }
 
+    container.style.display =
+        "";
 
-    let liners =
-        [...state.liners];
+    let items =
+        isLines
+            ? [...state.liners]
+            : [...state.verses];
 
+    const getUsages =
+        isLines
+            ? getLinerUsages
+            : getVerseUsages;
 
     if (
         linerFilter === "used"
     ) {
 
-        liners =
-            liners.filter(
-                liner =>
-                    getLinerUsages(
-                        liner
+        items =
+            items.filter(
+                item =>
+                    getUsages(
+                        item
                     ).length > 0
             );
     }
@@ -123,17 +253,17 @@ function renderLiners() {
         linerFilter === "unused"
     ) {
 
-        liners =
-            liners.filter(
-                liner =>
-                    getLinerUsages(
-                        liner
+        items =
+            items.filter(
+                item =>
+                    getUsages(
+                        item
                     ).length === 0
             );
     }
 
 
-    if (!liners.length) {
+    if (!items.length) {
 
         container.innerHTML = `
             <div class="empty-state">
@@ -145,25 +275,57 @@ function renderLiners() {
     }
 
 
+    const insertFn =
+        isLines
+            ? "insertLiner"
+            : "insertVerse";
+
+    const editFn =
+        isLines
+            ? "editLiner"
+            : "editVerse";
+
+    const deleteFn =
+        isLines
+            ? "deleteLiner"
+            : "deleteVerse";
+
+    const cardClass =
+        isLines
+            ? ""
+            : "verse-card";
+
+    const textClass =
+        isLines
+            ? ""
+            : "verse-text";
+
+
     container.innerHTML =
-        liners
-            .map(liner => {
+        items
+            .map(item => {
 
                 const usages =
-                    getLinerUsages(
-                        liner
+                    getUsages(
+                        item
                     );
 
 
                 return `
-                    <div class="liner">
+                    <div class="liner ${cardClass}">
 
                         <div class="liner-top">
 
-                            <div class="liner-text">
-                                “${escapeHTML(
-                                    liner.text
-                                )}”
+                            <div class="liner-text ${textClass}">
+                                ${
+                                    isLines
+                                        ? `“${escapeHTML(
+                                            item.text
+                                        )}”`
+                                        : escapeHTML(
+                                            item.text
+                                        )
+                                }
                             </div>
 
                             <div class="liner-meta">
@@ -181,7 +343,7 @@ function renderLiners() {
                                         ? `
                                             <button
                                                 type="button"
-                                                onclick="insertLiner('${liner.id}')"
+                                                onclick="${insertFn}('${item.id}')"
                                                 title="Insert"
                                             >
                                                 ↳
@@ -192,7 +354,15 @@ function renderLiners() {
 
                                 <button
                                     type="button"
-                                    onclick="deleteLiner('${liner.id}')"
+                                    onclick="${editFn}('${item.id}')"
+                                    title="Edit"
+                                >
+                                    ✎
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onclick="${deleteFn}('${item.id}')"
                                     title="Delete"
                                 >
                                     ×
@@ -237,12 +407,12 @@ function renderLiners() {
 
 
 /* =========================================================
-   FIND LINER USAGES
+   FIND USAGES IN SONGS
+   (shared by one liners and verses: plain substring
+    matching against every song section's lyrics)
 ========================================================= */
 
-function getLinerUsages(
-    liner
-) {
+function findUsageInSongs(text) {
 
     const usages = [];
 
@@ -261,7 +431,7 @@ function getLinerUsages(
                     typeof section.lyrics ===
                     "string" &&
                     section.lyrics.includes(
-                        liner.text
+                        text
                     )
                 ) {
 
@@ -280,6 +450,34 @@ function getLinerUsages(
 
 
     return usages;
+}
+
+
+/* =========================================================
+   FIND LINER USAGES
+========================================================= */
+
+function getLinerUsages(
+    liner
+) {
+
+    return findUsageInSongs(
+        liner.text
+    );
+}
+
+
+/* =========================================================
+   FIND VERSE USAGES
+========================================================= */
+
+function getVerseUsages(
+    verse
+) {
+
+    return findUsageInSongs(
+        verse.text
+    );
 }
 
 
@@ -314,6 +512,48 @@ function deleteLiner(id) {
         state.liners.filter(
             liner =>
                 liner.id !== id
+        );
+
+
+    saveState();
+
+    renderLiners();
+
+    renderTrash();
+}
+
+
+/* =========================================================
+   DELETE VERSE
+========================================================= */
+
+function deleteVerse(id) {
+
+    const verse =
+        state.verses.find(
+            verse =>
+                verse.id === id
+        );
+
+    if (!verse) {
+        return;
+    }
+
+
+    state.trash.push({
+
+        id: generateId(),
+
+        type: "verse",
+
+        data: verse
+    });
+
+
+    state.verses =
+        state.verses.filter(
+            verse =>
+                verse.id !== id
         );
 
 
@@ -373,8 +613,11 @@ function openLinerPicker() {
 
     if (modalTitle) {
         modalTitle.textContent =
-            "INSERT ONE LINER";
+            "INSERT";
     }
+
+
+    pickerView = "lines";
 
 
     modalBody.innerHTML = `
@@ -395,41 +638,38 @@ function openLinerPicker() {
         </div>
 
 
+        <div class="picker-tabs">
+
+            <button
+                class="picker-tab active"
+                data-picker-view="lines"
+                type="button"
+                onclick="setPickerView('lines', this)"
+            >
+                LINES
+            </button>
+
+            <button
+                class="picker-tab"
+                data-picker-view="verses"
+                type="button"
+                onclick="setPickerView('verses', this)"
+            >
+                VERSES
+            </button>
+
+        </div>
+
+
         <div
+            id="picker-list"
             style="
                 max-height:400px;
                 overflow:auto;
             "
         >
 
-            ${
-                state.liners.length
-                    ? state.liners
-                        .map(
-                            liner => `
-                                <div
-                                    onclick="insertLiner('${liner.id}')"
-                                    style="
-                                        padding:15px;
-                                        border-bottom:1px solid rgba(255,255,255,.07);
-                                        cursor:pointer;
-                                        color:#bbb;
-                                        line-height:1.6;
-                                    "
-                                >
-                                    “${escapeHTML(
-                                        liner.text
-                                    )}”
-                                </div>
-                            `
-                        )
-                        .join("")
-                    : `
-                        <div style="color:#666">
-                            NO ONE LINERS YET.
-                        </div>
-                    `
-            }
+            ${renderPickerItems("lines")}
 
         </div>
     `;
@@ -440,23 +680,126 @@ function openLinerPicker() {
 
 
 /* =========================================================
-   INSERT LINER
+   PICKER VIEW
 ========================================================= */
 
-function insertLiner(id) {
+let pickerView = "lines";
+
+
+function setPickerView(
+    view,
+    button
+) {
+
+    if (
+        view !== "lines" &&
+        view !== "verses"
+    ) {
+        return;
+    }
+
+
+    pickerView = view;
+
+
+    document
+        .querySelectorAll(
+            ".picker-tab"
+        )
+        .forEach(btn => {
+
+            btn.classList.toggle(
+                "active",
+                btn.dataset.pickerView ===
+                view
+            );
+        });
+
+
+    const list =
+        document.getElementById(
+            "picker-list"
+        );
+
+    if (list) {
+        list.innerHTML =
+            renderPickerItems(
+                view
+            );
+    }
+}
+
+
+function renderPickerItems(
+    view
+) {
+
+    const items =
+        view === "lines"
+            ? state.liners
+            : state.verses;
+
+    const insertFn =
+        view === "lines"
+            ? "insertLiner"
+            : "insertVerse";
+
+    if (!items.length) {
+
+        return `
+            <div style="color:#666">
+                NO ${view.toUpperCase()} YET.
+            </div>
+        `;
+    }
+
+
+    return items
+        .map(
+            item => `
+                <div
+                    onclick="${insertFn}('${item.id}')"
+                    style="
+                        padding:15px;
+                        border-bottom:1px solid rgba(255,255,255,.07);
+                        cursor:pointer;
+                        color:#bbb;
+                        line-height:1.6;
+                        ${
+                            view === "verses"
+                                ? "white-space:pre-wrap;"
+                                : ""
+                        }
+                    "
+                >
+                    ${
+                        view === "lines"
+                            ? `“${escapeHTML(
+                                item.text
+                            )}”`
+                            : escapeHTML(
+                                item.text
+                            )
+                    }
+                </div>
+            `
+        )
+        .join("");
+}
+
+
+/* =========================================================
+   INSERT TEXT INTO CURRENT SECTION
+   (shared by one liners and verses)
+========================================================= */
+
+function insertIntoSection(text) {
 
     const song =
         getCurrentSong();
 
-    const liner =
-        state.liners.find(
-            liner =>
-                liner.id === id
-        );
-
-
-    if (!song || !liner) {
-        return;
+    if (!song) {
+        return null;
     }
 
 
@@ -467,9 +810,8 @@ function insertLiner(id) {
                 currentSectionId
         );
 
-
     if (!section) {
-        return;
+        return null;
     }
 
 
@@ -508,7 +850,7 @@ function insertLiner(id) {
 
         section.lyrics =
             before +
-            liner.text +
+            text +
             after;
 
     } else {
@@ -519,7 +861,7 @@ function insertLiner(id) {
                     ? "\n"
                     : ""
             ) +
-            liner.text;
+            text;
     }
 
 
@@ -530,16 +872,72 @@ function insertLiner(id) {
     touchSong(song);
 
 
+    return song;
+}
+
+
+function markUsed(
+    items,
+    id,
+    song
+) {
+
+    const item =
+        items.find(
+            item =>
+                item.id === id
+        );
+
+    if (!item) {
+        return;
+    }
+
+
     if (
-        !liner.usedIn.includes(
+        !item.usedIn.includes(
             song.id
         )
     ) {
 
-        liner.usedIn.push(
+        item.usedIn.push(
             song.id
         );
     }
+}
+
+
+/* =========================================================
+   INSERT LINER
+========================================================= */
+
+function insertLiner(id) {
+
+    const liner =
+        state.liners.find(
+            liner =>
+                liner.id === id
+        );
+
+    if (!liner) {
+        return;
+    }
+
+
+    const song =
+        insertIntoSection(
+            liner.text
+        );
+
+    if (!song) {
+        return;
+    }
+
+
+    markUsed(
+        state.liners,
+        id,
+        song
+    );
 
 
     saveState();
@@ -549,4 +947,175 @@ function insertLiner(id) {
     renderSections();
 
     renderLiners();
+}
+
+
+/* =========================================================
+   INSERT VERSE
+========================================================= */
+
+function insertVerse(id) {
+
+    const verse =
+        state.verses.find(
+            verse =>
+                verse.id === id
+        );
+
+    if (!verse) {
+        return;
+    }
+
+
+    const song =
+        insertIntoSection(
+            verse.text
+        );
+
+    if (!song) {
+        return;
+    }
+
+
+    markUsed(
+        state.verses,
+        id,
+        song
+    );
+
+
+    saveState();
+
+    closeModal();
+
+    renderSections();
+
+    renderLiners();
+}
+
+
+/* =========================================================
+   EDIT ITEM (ONE LINER OR VERSE)
+========================================================= */
+
+function editLiner(id) {
+
+    openEditModal(
+        id,
+        "lines"
+    );
+}
+
+
+function editVerse(id) {
+
+    openEditModal(
+        id,
+        "verses"
+    );
+}
+
+
+function openEditModal(
+    id,
+    kind
+) {
+
+    const items =
+        kind === "lines"
+            ? state.liners
+            : state.verses;
+
+    const item =
+        items.find(
+            item =>
+                item.id === id
+        );
+
+    if (!item) {
+        return;
+    }
+
+
+    const modalTitle =
+        document.getElementById(
+            "modal-title"
+        );
+
+    const modalBody =
+        document.getElementById(
+            "modal-body"
+        );
+
+    const confirm =
+        document.getElementById(
+            "modal-confirm"
+        );
+
+    if (!modalTitle || !modalBody) {
+        return;
+    }
+
+
+    modalTitle.textContent =
+        kind === "lines"
+            ? "EDIT ONE LINER"
+            : "EDIT VERSE";
+
+
+    modalBody.innerHTML = `
+        <textarea
+            id="edit-text-input"
+            class="edit-modal-input"
+            placeholder="${
+                kind === "lines"
+                    ? "One liner"
+                    : "Verse"
+            }..."
+        >${escapeHTML(
+            item.text
+        )}</textarea>
+    `;
+
+
+    if (confirm) {
+
+        confirm.onclick =
+            function () {
+
+                const input =
+                    document.getElementById(
+                        "edit-text-input"
+                    );
+
+                const text =
+                    input?.value.trim();
+
+                if (!text) {
+                    return;
+                }
+
+                item.text = text;
+
+                saveState();
+
+                closeModal();
+
+                renderLiners();
+            };
+    }
+
+
+    openModal();
+
+
+    setTimeout(() => {
+
+        document
+            .getElementById(
+                "edit-text-input"
+            )
+            ?.focus();
+
+    }, 50);
 }

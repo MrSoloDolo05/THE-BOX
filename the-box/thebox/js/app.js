@@ -682,9 +682,6 @@ function setupIntro() {
         }
 
 
-        markIntroSeen();
-
-
         intro.classList.add(
             "exit"
         );
@@ -704,6 +701,11 @@ function setupIntro() {
         }
 
 
+        currentFolderId = null;
+
+        showView("crate");
+
+
         setTimeout(
             () => {
 
@@ -721,45 +723,6 @@ function setupIntro() {
         tagline.addEventListener(
             "click",
             enterApp
-        );
-    }
-
-
-    setTimeout(
-        enterApp,
-        2500
-    );
-}
-
-
-/* =========================================================
-   SKIP INTRO (returning visits)
-========================================================= */
-
-function skipIntro() {
-
-    const intro =
-        document.getElementById(
-            "intro"
-        );
-
-    const app =
-        document.getElementById(
-            "app"
-        );
-
-
-    if (intro) {
-
-        intro.style.display =
-            "none";
-    }
-
-
-    if (app) {
-
-        app.classList.add(
-            "visible"
         );
     }
 }
@@ -969,6 +932,69 @@ function setupLiners() {
             }
         );
     }
+
+
+    const verseAddButton =
+        document.getElementById(
+            "add-verse-button"
+        );
+
+    const verseInput =
+        document.getElementById(
+            "verse-input"
+        );
+
+
+    if (verseAddButton) {
+
+        verseAddButton.addEventListener(
+            "click",
+            addVerse
+        );
+    }
+
+
+    if (verseInput) {
+
+        verseInput.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key === "Enter" &&
+                    (
+                        event.ctrlKey ||
+                        event.metaKey
+                    )
+                ) {
+
+                    event.preventDefault();
+
+                    addVerse();
+                }
+            }
+        );
+    }
+
+
+    document
+        .querySelectorAll(
+            ".liner-tab"
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    setLinerView(
+                        button.dataset.linerview ||
+                        "lines",
+                        button
+                    );
+                }
+            );
+        });
 
 
     document
@@ -1225,6 +1251,36 @@ function setupDatabase() {
         );
 
 
+    const emptyTrashButton =
+        document.getElementById(
+            "empty-trash-button"
+        );
+
+
+    if (emptyTrashButton) {
+
+        emptyTrashButton.addEventListener(
+            "click",
+            () => {
+
+                if (!state.trash.length) {
+                    return;
+                }
+
+                const confirmed =
+                    window.confirm(
+                        "Permanently delete everything in the trash? " +
+                        "This cannot be undone."
+                    );
+
+                if (confirmed) {
+                    emptyTrash();
+                }
+            }
+        );
+    }
+
+
     if (clearButton) {
 
         clearButton.addEventListener(
@@ -1403,9 +1459,46 @@ function initApp() {
 
     setupSearch();
 
+    setupImport();
+
     renderAll();
 
     restoreLastView();
+
+
+    /* ---- Firebase sync ---- */
+    initFirebase();
+    initAuth();
+}
+
+
+/* =========================================================
+   AUTH BUTTON HANDLER
+========================================================= */
+
+function handleAuthClick() {
+    const button =
+        document.getElementById("auth-button");
+
+    if (!button) return;
+
+    if (isSignedIn()) {
+        signOut();
+        button.textContent = "SIGN IN WITH GOOGLE";
+        button.classList.remove("signed-in");
+    } else {
+        button.textContent = "SIGNING IN…";
+        signInWithGoogle()
+            .then((user) => {
+                if (user) {
+                    button.textContent = "SIGN OUT";
+                    button.classList.add("signed-in");
+                }
+            })
+            .catch(() => {
+                button.textContent = "SIGN IN WITH GOOGLE";
+            });
+    }
 }
 
 

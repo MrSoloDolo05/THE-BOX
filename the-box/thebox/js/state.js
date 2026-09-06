@@ -47,6 +47,7 @@ let state = {
     songs: [],
     folders: [],
     liners: [],
+    verses: [],
     trash: []
 };
 
@@ -57,5 +58,9 @@ let currentView = "crate";
 
 let draggedSongId = null;
 let linerFilter = "all";
+let linerView = "lines";
+
+let lyricsSaveTimer = null;
+let cloudPushTimer = null;
 
 window.searchResults = [];

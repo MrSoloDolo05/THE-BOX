@@ -71,8 +71,10 @@ function renderRedRoom() {
 
     if (titleInput) {
 
+        /* Empty title stays empty: the placeholder handles
+           the visual "UNTITLED" (see index.html). */
         titleInput.value =
-            song.title || "UNTITLED";
+            song.title || "";
     }
 
 
@@ -163,17 +165,17 @@ function renderSections() {
                                 <input
                                     class="section-type"
                                     type="text"
+                                    data-section-id="${section.id}"
                                     value="${escapeAttribute(
                                         section.type
                                     )}"
-                                    onchange="renameSection('${section.id}', this.value)"
                                 >
 
                                 <div class="section-actions">
 
                                     <button
                                         type="button"
-                                        onclick="setCurrentSection('${section.id}')"
+                                        data-action="select-section"
                                         title="Select section"
                                     >
                                         SELECT
@@ -181,7 +183,7 @@ function renderSections() {
 
                                     <button
                                         type="button"
-                                        onclick="openLinerPickerForSection('${section.id}')"
+                                        data-action="open-picker"
                                         title="Insert one liner"
                                     >
                                         + LINE
@@ -189,7 +191,7 @@ function renderSections() {
 
                                     <button
                                         type="button"
-                                        onclick="moveSection('${section.id}', -1)"
+                                        data-action="move-section-up"
                                         title="Move up"
                                     >
                                         ↑
@@ -197,7 +199,7 @@ function renderSections() {
 
                                     <button
                                         type="button"
-                                        onclick="moveSection('${section.id}', 1)"
+                                        data-action="move-section-down"
                                         title="Move down"
                                     >
                                         ↓
@@ -205,7 +207,7 @@ function renderSections() {
 
                                     <button
                                         type="button"
-                                        onclick="deleteSection('${section.id}')"
+                                        data-action="delete-section"
                                         title="Delete section"
                                     >
                                         ×
@@ -221,9 +223,6 @@ function renderSections() {
                                 data-editor="${section.id}"
                                 data-section-id="${section.id}"
                                 placeholder="Write here..."
-                                onfocus="setCurrentSection('${section.id}')"
-                                onblur="flushLyricsSave()"
-                                oninput="updateSectionLyrics('${section.id}', this.value)"
                             >${escapeHTML(
                                 section.lyrics
                             )}</textarea>
@@ -617,7 +616,7 @@ function saveSong() {
             titleInput.value.trim();
 
         song.title =
-            title || "UNTITLED";
+            title;
     }
 
 
@@ -668,8 +667,7 @@ function updateSongTitle() {
 
 
     song.title =
-        input.value.trim() ||
-        "UNTITLED";
+        input.value.trim();
 
 
     touchSong(song);
@@ -804,29 +802,28 @@ function createCustomSection() {
 
     if (confirm) {
 
-        confirm.onclick =
-            function () {
+        modalConfirm.set(function () {
 
-                const input =
-                    document.getElementById(
-                        "custom-section-input"
-                    );
-
-                const name =
-                    input?.value.trim();
-
-
-                if (!name) {
-                    return;
-                }
-
-
-                addSection(
-                    name
+            const input =
+                document.getElementById(
+                    "custom-section-input"
                 );
 
-                closeModal();
-            };
+            const name =
+                input?.value.trim();
+
+
+            if (!name) {
+                return;
+            }
+
+
+            addSection(
+                name
+            );
+
+            closeModal();
+        });
     }
 
 

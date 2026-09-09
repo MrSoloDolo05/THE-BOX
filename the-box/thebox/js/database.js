@@ -6,6 +6,72 @@ const DATABASE_KEY = "the_box_app_state";
 
 const UI_STATE_KEY = "the_box_ui_state";
 
+const REVISION_KEY = "the_box_revision_clock";
+
+
+/* =========================================================
+   REVISION CLOCK
+   A persistent monotonic counter used to version the whole
+   cloud state document. Lives in localStorage (not inside
+   the state document) so CLEAR / fresh installs can never
+   regress the counter and resurrect stale cloud snapshots.
+========================================================= */
+
+function getRevisionClock() {
+
+    try {
+
+        const raw =
+            localStorage.getItem(
+                REVISION_KEY
+            );
+
+        const value =
+            parseInt(raw || "0", 10);
+
+        /* Never go backwards. */
+        return (
+            Number.isFinite(value) &&
+            value >= 0
+        )
+            ? value
+            : 0;
+
+    } catch (error) {
+
+        console.error(
+            "Could not read revision clock:",
+            error
+        );
+
+        return 0;
+    }
+}
+
+
+function bumpRevisionClock() {
+
+    const next =
+        getRevisionClock() + 1;
+
+    try {
+
+        localStorage.setItem(
+            REVISION_KEY,
+            String(next)
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Could not persist revision clock:",
+            error
+        );
+    }
+
+    return next;
+}
+
 
 /* =========================================================
    UI STATE (current view, persisted across refreshes)
@@ -65,6 +131,11 @@ function loadUIState() {
 
 function createDefaultState() {
     return {
+        revision: 0,
+
+        updatedAt:
+            new Date().toISOString(),
+
         songs: [],
 
         folders: [
@@ -85,10 +156,31 @@ function createDefaultState() {
 
 /* =========================================================
    SAVE STATE
+   Every normal save bumps the document revision (making it
+   strictly newer than any previous cloud snapshot) and
+   schedules a background push to Firestore.
+
+   saveState({ silent: true }) ONLY persists locally and is
+   used when adopting remote state so we never re-bump the
+   revision we just received (avoids a sync echo loop).
 ========================================================= */
 
-function saveState() {
+function saveState(options) {
     try {
+
+        const silent =
+            options &&
+            options.silent === true;
+
+        if (!silent) {
+
+            state.revision =
+                bumpRevisionClock();
+
+            state.updatedAt =
+                new Date().toISOString();
+        }
+
         localStorage.setItem(
             DATABASE_KEY,
             JSON.stringify(state)
@@ -103,6 +195,7 @@ function saveState() {
 
         /* Fire-and-forget cloud sync when signed in. */
         if (
+            !silent &&
             typeof isSignedIn === "function" &&
             isSignedIn() &&
             typeof pushState === "function"
@@ -141,6 +234,15 @@ function loadState() {
             JSON.parse(saved);
 
         state = {
+            revision:
+                Number.isFinite(parsed.revision)
+                    ? parsed.revision
+                    : 0,
+
+            updatedAt:
+                parsed.updatedAt ||
+                new Date().toISOString(),
+
             songs: Array.isArray(parsed.songs)
                 ? parsed.songs
                 : [],
@@ -200,9 +302,13 @@ function loadState() {
             }
 
             if (
-                typeof song.title !== "string" ||
-                !song.title.trim()
+                typeof song.title !== "string"
             ) {
+                /* Missing (not just empty) titles get a
+                   placeholder name for display until the
+                   user types something. An empty string is
+                   left empty: the UI shows "UNTITLED" via
+                   the input placeholder instead. */
                 song.title = "UNTITLED";
             }
 
@@ -341,6 +447,12 @@ function clearDatabase() {
     currentSongId = null;
     currentSectionId = null;
     currentFolderId = null;
+
+    /* Bump the revision and push the cleared state so the
+       cloud document also resets. Without this, a stale
+       higher-revision cloud snapshot would win the next
+       merge and resurrect everything the user deleted. */
+    saveState();
 
     renderAll();
     showView("crate");

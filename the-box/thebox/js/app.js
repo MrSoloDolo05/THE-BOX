@@ -470,6 +470,9 @@ function openModal() {
     modal.classList.add(
         "open"
     );
+
+    /* Lock background scroll while the modal is up. */
+    refreshScrollLock();
 }
 
 
@@ -490,6 +493,8 @@ function closeModal() {
         "open"
     );
 
+    refreshScrollLock();
+
 
     const confirm =
         document.getElementById(
@@ -499,7 +504,7 @@ function closeModal() {
 
     if (confirm) {
 
-        confirm.onclick = null;
+        modalConfirm.clear();
     }
 }
 
@@ -582,21 +587,163 @@ function setupNavigation() {
                     );
 
 
-                    const sidebar =
-                        document.querySelector(
-                            ".sidebar"
-                        );
+                    /* Dismiss the mobile drawer after nav. */
+                    if (typeof closeMobileSidebar === "function") {
 
-
-                    if (sidebar) {
-
-                        sidebar.classList.remove(
-                            "open"
-                        );
+                        closeMobileSidebar();
                     }
                 }
             );
         });
+}
+
+
+/* =========================================================
+   MOBILE SIDEBAR (drawer)
+========================================================= */
+
+function getSidebar() {
+
+    return document.querySelector(
+        ".sidebar"
+    );
+}
+
+
+function getSidebarBackdrop() {
+
+    return document.getElementById(
+        "sidebar-backdrop"
+    );
+}
+
+
+function isSidebarOpen() {
+
+    const sidebar =
+        getSidebar();
+
+    return !!sidebar &&
+        sidebar.classList.contains(
+            "open"
+        );
+}
+
+
+/* Recompute background scroll-lock from whatever overlay is
+   actually showing (drawer, backdrop, tools, modal). */
+function refreshScrollLock() {
+
+    const overlayActive =
+        document
+            .getElementById("modal-overlay")
+            ?.classList
+            .contains("open") ||
+
+        document
+            .getElementById("sidebar-backdrop")
+            ?.classList
+            .contains("show") ||
+
+        document
+            .getElementById("tools")
+            ?.classList
+            .contains("open");
+
+    if (overlayActive) {
+
+        document.body.classList.add(
+            "locked"
+        );
+    } else {
+
+        document.body.classList.remove(
+            "locked"
+        );
+    }
+}
+
+
+function openMobileSidebar() {
+
+    const sidebar =
+        getSidebar();
+
+    if (!sidebar) {
+        return;
+    }
+
+    const wasOpen =
+        sidebar.classList.contains("open");
+
+    sidebar.classList.add(
+        "open"
+    );
+
+    const backdrop =
+        getSidebarBackdrop();
+
+    if (backdrop) {
+
+        backdrop.classList.add(
+            "show"
+        );
+
+        backdrop.setAttribute(
+            "aria-hidden",
+            "false"
+        );
+    }
+
+    /* Lock background scroll behind the drawer. */
+    refreshScrollLock();
+
+    /* Push a history entry so the native browser / Android
+       back gesture dismisses the drawer instead of leaving
+       the page (popped by the popstate handler below). */
+    if (!wasOpen) {
+
+        try {
+
+            history.pushState(
+                { sidebar: true },
+                ""
+            );
+        } catch (error) {
+            /* History unavailable (file:// etc.): ignore. */
+        }
+    }
+}
+
+
+function closeMobileSidebar() {
+
+    const sidebar =
+        getSidebar();
+
+    if (sidebar) {
+
+        sidebar.classList.remove(
+            "open"
+        );
+    }
+
+    const backdrop =
+        getSidebarBackdrop();
+
+    if (backdrop) {
+
+        backdrop.classList.remove(
+            "show"
+        );
+
+        backdrop.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+    }
+
+    refreshScrollLock();
 }
 
 
@@ -612,9 +759,15 @@ function setupMobileMenu() {
         );
 
     const sidebar =
-        document.querySelector(
-            ".sidebar"
+        getSidebar();
+
+    const closeButton =
+        document.getElementById(
+            "sidebar-close"
         );
+
+    const backdrop =
+        getSidebarBackdrop();
 
 
     if (
@@ -630,9 +783,60 @@ function setupMobileMenu() {
         "click",
         () => {
 
-            sidebar.classList.toggle(
-                "open"
-            );
+            if (isSidebarOpen()) {
+
+                closeMobileSidebar();
+            } else {
+
+                openMobileSidebar();
+            }
+        }
+    );
+
+
+    if (closeButton) {
+
+        closeButton.addEventListener(
+            "click",
+            closeMobileSidebar
+        );
+    }
+
+
+    if (backdrop) {
+
+        backdrop.addEventListener(
+            "click",
+            closeMobileSidebar
+        );
+    }
+
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Escape" &&
+                isSidebarOpen()
+            ) {
+
+                closeMobileSidebar();
+            }
+        }
+    );
+
+
+    /* Native back gesture / browser back button: pop the
+       history entry we pushed and dismiss the drawer. */
+    window.addEventListener(
+        "popstate",
+        () => {
+
+            if (isSidebarOpen()) {
+
+                closeMobileSidebar();
+            }
         }
     );
 }
@@ -1015,6 +1219,128 @@ function setupLiners() {
                 }
             );
         });
+
+
+    /* -------------------------------------------------
+       LINER LIST DELEGATION
+    -------------------------------------------------- */
+
+    ["liner-list", "verse-list"].forEach(id => {
+
+        const list =
+            document.getElementById(id);
+
+        if (!list) {
+            return;
+        }
+
+        const isLines =
+            id === "liner-list";
+
+        delegateClick(
+            list,
+            '[data-action="insert-item"]',
+            (event, el) => {
+
+                const itemId =
+                    el.closest(".liner")
+                        .dataset.itemId;
+
+                if (isLines) {
+
+                    insertLiner(itemId);
+
+                } else {
+
+                    insertVerse(itemId);
+                }
+            }
+        );
+
+        delegateClick(
+            list,
+            '[data-action="edit-item"]',
+            (event, el) => {
+
+                const itemId =
+                    el.closest(".liner")
+                        .dataset.itemId;
+
+                if (isLines) {
+
+                    editLiner(itemId);
+
+                } else {
+
+                    editVerse(itemId);
+                }
+            }
+        );
+
+        delegateClick(
+            list,
+            '[data-action="delete-item"]',
+            (event, el) => {
+
+                const itemId =
+                    el.closest(".liner")
+                        .dataset.itemId;
+
+                if (isLines) {
+
+                    deleteLiner(itemId);
+
+                } else {
+
+                    deleteVerse(itemId);
+                }
+            }
+        );
+    });
+
+
+    /* -------------------------------------------------
+       PICKER DELEGATION (inside the shared modal)
+    -------------------------------------------------- */
+
+    const modalBody =
+        document.getElementById(
+            "modal-body"
+        );
+
+    if (modalBody) {
+
+        delegateClick(
+            modalBody,
+            ".picker-tab",
+            (event, el) => {
+
+                setPickerView(
+                    el.dataset.pickerView || "lines",
+                    el
+                );
+            }
+        );
+
+        delegateClick(
+            modalBody,
+            ".picker-item",
+            (event, el) => {
+
+                const itemId =
+                    el.dataset.itemId;
+
+                if (pickerView === "verses") {
+
+                    insertVerse(itemId);
+
+                } else {
+
+                    insertLiner(itemId);
+                }
+            }
+        );
+    }
 }
 
 
@@ -1056,6 +1382,217 @@ function setupCrate() {
 
                 showView(
                     "crate"
+                );
+            }
+        );
+    }
+
+
+    /* -------------------------------------------------
+       CRATE DELEGATION
+       (folder grid, song lists, trash, move-song modal)
+    -------------------------------------------------- */
+
+    const folderGrid =
+        document.getElementById(
+            "folder-grid"
+        );
+
+    if (folderGrid) {
+
+        delegateClick(
+            folderGrid,
+            ".folder",
+            (event, el) => {
+
+                if (
+                    event.target.closest(
+                        ".folder-actions"
+                    )
+                ) {
+                    return;
+                }
+
+                openFolder(
+                    el.dataset.folderId
+                );
+            }
+        );
+
+        delegateClick(
+            folderGrid,
+            '[data-action="rename-folder"]',
+            (event, el) => {
+
+                renameFolder(
+                    el.closest(".folder")
+                        .dataset.folderId
+                );
+            }
+        );
+
+        delegateClick(
+            folderGrid,
+            '[data-action="delete-folder"]',
+            (event, el) => {
+
+                deleteFolder(
+                    el.closest(".folder")
+                        .dataset.folderId
+                );
+            }
+        );
+    }
+
+
+    ["song-list", "folder-song-list"].forEach(id => {
+
+        const songList =
+            document.getElementById(id);
+
+        if (!songList) {
+            return;
+        }
+
+        delegateClick(
+            songList,
+            ".song-row",
+            (event, el) => {
+
+                if (
+                    event.target.closest(
+                        ".song-actions"
+                    )
+                ) {
+                    return;
+                }
+
+                openSong(
+                    el.dataset.songId
+                );
+            }
+        );
+
+        delegateClick(
+            songList,
+            '[data-action="move-song"]',
+            (event, el) => {
+
+                openMoveSongModal(
+                    el.closest(".song-row")
+                        .dataset.songId
+                );
+            }
+        );
+
+        delegateClick(
+            songList,
+            '[data-action="duplicate-song"]',
+            (event, el) => {
+
+                duplicateSong(
+                    el.closest(".song-row")
+                        .dataset.songId
+                );
+            }
+        );
+
+        delegateClick(
+            songList,
+            '[data-action="delete-song"]',
+            (event, el) => {
+
+                deleteSong(
+                    el.closest(".song-row")
+                        .dataset.songId
+                );
+            }
+        );
+
+        songList.addEventListener(
+            "dragstart",
+            event => {
+
+                const el =
+                    event.target.closest(
+                        ".song-row"
+                    );
+
+                if (el && songList.contains(el)) {
+
+                    songDragStart(
+                        event,
+                        el.dataset.songId,
+                        el
+                    );
+                }
+            }
+        );
+
+        songList.addEventListener(
+            "dragend",
+            event => {
+
+                const el =
+                    event.target.closest(
+                        ".song-row"
+                    );
+
+                if (el && songList.contains(el)) {
+
+                    songDragEnd();
+                }
+            }
+        );
+    });
+
+
+    const trashList =
+        document.getElementById(
+            "trash-list"
+        );
+
+    if (trashList) {
+
+        delegateClick(
+            trashList,
+            '[data-action="restore-trash"]',
+            (event, el) => {
+
+                restoreTrash(
+                    el.dataset.trashId
+                );
+            }
+        );
+
+        delegateClick(
+            trashList,
+            '[data-action="permanent-delete"]',
+            (event, el) => {
+
+                permanentlyDelete(
+                    el.dataset.trashId
+                );
+            }
+        );
+    }
+
+
+    const modalBody =
+        document.getElementById(
+            "modal-body"
+        );
+
+    if (modalBody) {
+
+        delegateClick(
+            modalBody,
+            ".move-to-folder-option",
+            (event, el) => {
+
+                moveSongToFolder(
+                    el.dataset.songId,
+                    el.dataset.folderId
                 );
             }
         );
@@ -1193,6 +1730,146 @@ function setupRedRoom() {
                 }
             );
         });
+
+
+    /* -------------------------------------------------
+       RED ROOM SECTION DELEGATION
+    -------------------------------------------------- */
+
+    const sectionsContainer =
+        document.getElementById(
+            "song-sections"
+        );
+
+    if (sectionsContainer) {
+
+        delegateChange(
+            sectionsContainer,
+            ".section-type",
+            (event, el) => {
+
+                renameSection(
+                    el.dataset.sectionId,
+                    el.value
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="select-section"]',
+            (event, el) => {
+
+                setCurrentSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="open-picker"]',
+            (event, el) => {
+
+                openLinerPickerForSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="move-section-up"]',
+            (event, el) => {
+
+                moveSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId,
+                    -1
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="move-section-down"]',
+            (event, el) => {
+
+                moveSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId,
+                    1
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="delete-section"]',
+            (event, el) => {
+
+                deleteSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId
+                );
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "input",
+            event => {
+
+                const el =
+                    event.target.closest(
+                        ".lyrics-editor"
+                    );
+
+                if (el && sectionsContainer.contains(el)) {
+
+                    updateSectionLyrics(
+                        el.dataset.sectionId,
+                        el.value
+                    );
+                }
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "focusin",
+            event => {
+
+                const el =
+                    event.target.closest(
+                        ".lyrics-editor"
+                    );
+
+                if (el && sectionsContainer.contains(el)) {
+
+                    setCurrentSection(
+                        el.dataset.sectionId
+                    );
+                }
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "focusout",
+            event => {
+
+                const el =
+                    event.target.closest(
+                        ".lyrics-editor"
+                    );
+
+                if (el && sectionsContainer.contains(el)) {
+
+                    flushLyricsSave();
+                }
+            }
+        );
+    }
 }
 
 
@@ -1395,6 +2072,73 @@ function setupTools() {
                 }
             );
         });
+
+
+    /* -------------------------------------------------
+       TOOLS DELEGATION
+       (rhyme words, idea retry, search results)
+    -------------------------------------------------- */
+
+    const rhymeResults =
+        document.getElementById(
+            "rhyme-results"
+        );
+
+    if (rhymeResults) {
+
+        delegateClick(
+            rhymeResults,
+            ".rhyme-word",
+            (event, el) => {
+
+                insertRhyme(
+                    el.dataset.rhymeWord
+                );
+            }
+        );
+    }
+
+
+    const ideaOutput =
+        document.getElementById(
+            "idea-output"
+        );
+
+    if (ideaOutput) {
+
+        delegateClick(
+            ideaOutput,
+            ".idea-again",
+            (event, el) => {
+
+                ideaHelp(
+                    el.dataset.ideaType
+                );
+            }
+        );
+    }
+
+
+    const searchResults =
+        document.getElementById(
+            "search-results"
+        );
+
+    if (searchResults) {
+
+        delegateClick(
+            searchResults,
+            ".search-result",
+            (event, el) => {
+
+                searchResultClick(
+                    Number(
+                        el.dataset.index
+                    )
+                );
+            }
+        );
+    }
 }
 
 

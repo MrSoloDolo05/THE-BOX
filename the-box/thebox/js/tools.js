@@ -349,7 +349,9 @@ function renderRhymeWords(list, fallback) {
         .map(word => `
             <span
                 class="rhyme-word"
-                onclick="insertRhyme('${word.replace(/'/g, "")}')"
+                data-rhyme-word="${escapeAttribute(
+                    word.replace(/'/g, "")
+                )}"
                 title="Insert ${escapeHTML(word)}"
             >
                 ${escapeHTML(word)}
@@ -930,7 +932,7 @@ function ideaHelp(type) {
         <button
             class="idea-again"
             type="button"
-            onclick="ideaHelp('${type}')"
+            data-idea-type="${escapeAttribute(type)}"
         >
             ↻ ANOTHER
         </button>
@@ -956,6 +958,12 @@ function openTools() {
     tools.classList.add(
         "open"
     );
+
+    /* Lock background scroll while the tools drawer is up. */
+    if (typeof refreshScrollLock === "function") {
+
+        refreshScrollLock();
+    }
 }
 
 
@@ -973,6 +981,11 @@ function closeTools() {
     tools.classList.remove(
         "open"
     );
+
+    if (typeof refreshScrollLock === "function") {
+
+        refreshScrollLock();
+    }
 }
 
 
@@ -1320,7 +1333,7 @@ function performSearch(query) {
 
                     <div
                         class="search-result"
-                        onclick="searchResultClick(${index})"
+                        data-index="${index}"
                     >
 
                         <div class="search-result-type">

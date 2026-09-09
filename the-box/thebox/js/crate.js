@@ -43,16 +43,12 @@ function renderCrate() {
                     <div
                         class="folder"
                         data-folder-id="${folder.id}"
-                        ondragover="folderDragOver(event)"
-                        ondragleave="folderDragLeave(event)"
-                        ondrop="folderDrop(event, '${folder.id}')"
-                        onclick="openFolder('${folder.id}')"
                     >
 
                         <div class="folder-actions">
 
                             <button
-                                onclick="event.stopPropagation(); renameFolder('${folder.id}')"
+                                data-action="rename-folder"
                                 title="Rename"
                                 type="button"
                             >
@@ -60,7 +56,7 @@ function renderCrate() {
                             </button>
 
                             <button
-                                onclick="event.stopPropagation(); deleteFolder('${folder.id}')"
+                                data-action="delete-folder"
                                 title="Delete"
                                 type="button"
                             >
@@ -146,10 +142,8 @@ function renderSongRow(
     return `
         <div
             class="song-row"
+            data-song-id="${song.id}"
             draggable="true"
-            ondragstart="songDragStart(event, '${song.id}')"
-            ondragend="songDragEnd()"
-            onclick="openSong('${song.id}')"
         >
 
             <div class="song-number">
@@ -198,24 +192,24 @@ function renderSongRow(
             <div class="song-actions">
 
                 <button
+                    data-action="move-song"
                     type="button"
-                    onclick="event.stopPropagation(); openMoveSongModal('${song.id}')"
                     title="Move to folder"
                 >
                     ⇢
                 </button>
 
                 <button
+                    data-action="duplicate-song"
                     type="button"
-                    onclick="event.stopPropagation(); duplicateSong('${song.id}')"
                     title="Duplicate"
                 >
                     ⧉
                 </button>
 
                 <button
+                    data-action="delete-song"
                     type="button"
-                    onclick="event.stopPropagation(); deleteSong('${song.id}')"
                     title="Delete"
                 >
                     ×
@@ -266,7 +260,7 @@ function createFolder() {
 
     if (confirm) {
 
-        confirm.onclick = function () {
+        modalConfirm.set(function () {
 
             const input =
                 document.getElementById(
@@ -290,7 +284,7 @@ function createFolder() {
             closeModal();
 
             renderCrate();
-        };
+        });
     }
 
     openModal();
@@ -346,12 +340,23 @@ function deleteFolder(id) {
             );
 
 
-    state.trash.push({
-        id: generateId(),
-        type: "folder",
-        data: folder,
-        songIds: songIds
-    });
+    const alreadyTrashed =
+        state.trash.some(
+            item =>
+                item.type === "folder" &&
+                item.data &&
+                item.data.id === id
+        );
+
+    if (!alreadyTrashed) {
+
+        state.trash.push({
+            id: generateId(),
+            type: "folder",
+            data: folder,
+            songIds: songIds
+        });
+    }
 
 
     state.folders =
@@ -450,7 +455,10 @@ function createSong() {
 
         id: generateId(),
 
-        title: "UNTITLED",
+        /* Title starts EMPTY: the input's placeholder shows
+           "UNTITLED" visually without forcing that string
+           into the stored value. */
+        title: "",
 
         status: "Draft",
 
@@ -583,11 +591,24 @@ function deleteSong(id) {
     }
 
 
-    state.trash.push({
-        id: generateId(),
-        type: "song",
-        data: song
-    });
+    /* Idempotent: never create a second trash record for a
+       song that is already in the trash. */
+    const alreadyTrashed =
+        state.trash.some(
+            item =>
+                item.type === "song" &&
+                item.data &&
+                item.data.id === id
+        );
+
+    if (!alreadyTrashed) {
+
+        state.trash.push({
+            id: generateId(),
+            type: "song",
+            data: song
+        });
+    }
 
 
     state.songs =
@@ -644,8 +665,10 @@ function openMoveSongModal(songId) {
 
             ${state.folders.map(folder => `
                 <button
+                    class="move-to-folder-option"
                     type="button"
-                    onclick="moveSongToFolder('${songId}', '${folder.id}')"
+                    data-song-id="${songId}"
+                    data-folder-id="${folder.id}"
                     style="
                         text-align:left;
                         border:1px solid var(--line);
@@ -697,35 +720,42 @@ function moveSongToFolder(songId, folderId) {
    FOLDER DRAG / DROP
 ========================================================= */
 
-function folderDragOver(event) {
+function folderDragOver(
+    event,
+    element
+) {
 
     event.preventDefault();
 
-    event.currentTarget
-        .classList
-        .add("drag-over");
+    element.classList.add(
+        "drag-over"
+    );
 }
 
 
-function folderDragLeave(event) {
+function folderDragLeave(
+    event,
+    element
+) {
 
-    event.currentTarget
-        .classList
-        .remove("drag-over");
+    element.classList.remove(
+        "drag-over"
+    );
 }
 
 
 function folderDrop(
     event,
+    element,
     folderId
 ) {
 
     event.preventDefault();
     event.stopPropagation();
 
-    event.currentTarget
-        .classList
-        .remove("drag-over");
+    element.classList.remove(
+        "drag-over"
+    );
 
 
     if (!draggedSongId) {
@@ -772,7 +802,8 @@ function folderDrop(
 
 function songDragStart(
     event,
-    id
+    id,
+    element
 ) {
 
     draggedSongId = id;
@@ -788,9 +819,9 @@ function songDragStart(
         );
     }
 
-    event.currentTarget
-        .classList
-        .add("dragging");
+    element.classList.add(
+        "dragging"
+    );
 }
 
 
@@ -952,13 +983,12 @@ function renameFolder(id) {
 
     if (confirmButton) {
 
-        confirmButton.onclick =
-            function () {
+        modalConfirm.set(function () {
 
-                saveFolderRename(
-                    id
-                );
-            };
+            saveFolderRename(
+                id
+            );
+        });
     }
 
 
@@ -1111,14 +1141,16 @@ function renderTrash() {
 
                         <button
                             type="button"
-                            onclick="restoreTrash('${item.id}')"
+                            data-action="restore-trash"
+                            data-trash-id="${item.id}"
                         >
                             RESTORE
                         </button>
 
                         <button
                             type="button"
-                            onclick="permanentlyDelete('${item.id}')"
+                            data-action="permanent-delete"
+                            data-trash-id="${item.id}"
                         >
                             DELETE
                         </button>
@@ -1151,17 +1183,38 @@ function restoreTrash(id) {
         item.type === "song"
     ) {
 
-        state.songs.push(
-            item.data
-        );
+        /* Idempotent restore: only add the song back if it
+           is not already in the crate (prevents duplicates
+           when a restore races a sync echo). */
+        const exists =
+            state.songs.some(
+                song =>
+                    song.id === item.data.id
+            );
+
+        if (!exists) {
+
+            state.songs.push(
+                item.data
+            );
+        }
 
     } else if (
         item.type === "folder"
     ) {
 
-        state.folders.push(
-            item.data
-        );
+        const folderExists =
+            state.folders.some(
+                folder =>
+                    folder.id === item.data.id
+            );
+
+        if (!folderExists) {
+
+            state.folders.push(
+                item.data
+            );
+        }
 
 
         /*
@@ -1233,17 +1286,35 @@ function restoreTrash(id) {
         item.type === "liner"
     ) {
 
-        state.liners.push(
-            item.data
-        );
+        const linerExists =
+            state.liners.some(
+                liner =>
+                    liner.id === item.data.id
+            );
+
+        if (!linerExists) {
+
+            state.liners.push(
+                item.data
+            );
+        }
 
     } else if (
         item.type === "verse"
     ) {
 
-        state.verses.push(
-            item.data
-        );
+        const verseExists =
+            state.verses.some(
+                verse =>
+                    verse.id === item.data.id
+            );
+
+        if (!verseExists) {
+
+            state.verses.push(
+                item.data
+            );
+        }
     }
 
 

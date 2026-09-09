@@ -196,7 +196,16 @@ async function pullState() {
         if (doc.exists) {
             const data = doc.data();
             if (data && data.state) {
-                mergeStates(data.state);
+                const adopted =
+                    applyRemoteState(data.state);
+
+                if (!adopted) {
+                    /* Cloud is stale (or equal) relative to
+                       local: push local so the document
+                       converges instead of letting an old
+                       snapshot win. */
+                    await pushState();
+                }
             }
         } else {
             /* First time on this device: upload local. */
@@ -212,11 +221,129 @@ async function pullState() {
 
 
 /* =========================================================
-   MERGE STATES
-   Union by item id; newer `modified` wins on conflict.
+   REMOTE STATE APPLICATION
+   Adopt only strictly newer snapshots; deletions propagate.
 ========================================================= */
 
-function mergeStates(remoteState) {
+function sanitizeCollection(list) {
+    if (!Array.isArray(list)) {
+        return [];
+    }
+
+    const seen = new Set();
+    const cleaned = [];
+
+    list.forEach(item => {
+        if (!item || typeof item !== "object" || !item.id) return;
+        if (seen.has(item.id)) return;
+        seen.add(item.id);
+        cleaned.push(item);
+    });
+
+    return cleaned;
+}
+
+
+function applyRemoteState(remoteState) {
+    if (!remoteState || typeof remoteState !== "object") {
+        return false;
+    }
+
+    const remoteRevision =
+        Number(remoteState.revision || 0);
+
+    const localRevision =
+        Number(state.revision || 0);
+
+    const remoteStamp =
+        String(remoteState.updatedAt || "");
+
+    const localStamp =
+        String(state.updatedAt || "");
+
+    /* LAST-WRITE-WINS: the client `updatedAt` ISO timestamp is
+       the primary signal. Both devices write ISO strings, so a
+       simple string compare is correct. Revision counters are
+       per-device clocks and must NOT decide the winner (a stale
+       desktop with a high counter would otherwise clobber newer
+       mobile changes — the exact bug this fixes). Revision only
+       breaks exact-timestamp ties. */
+    const remoteIsNewer =
+        remoteStamp > localStamp ||
+        (
+            remoteStamp === localStamp &&
+            remoteRevision > localRevision
+        );
+
+    if (!remoteIsNewer) {
+        /* Local is at least as fresh: ignore the stale
+           snapshot so it cannot overwrite local deletions. */
+        return false;
+    }
+
+
+    /* Adopt the remote document wholesale (deduped by id).
+       Deletions are representable: an item missing from the
+       adopted snapshot is deleted everywhere. */
+    state.songs =
+        sanitizeCollection(remoteState.songs);
+
+    state.folders =
+        sanitizeCollection(remoteState.folders);
+
+    state.liners =
+        sanitizeCollection(remoteState.liners);
+
+    state.verses =
+        sanitizeCollection(remoteState.verses);
+
+    state.trash =
+        sanitizeCollection(remoteState.trash);
+
+
+    /* Keep app invariants intact after adoption. */
+    if (!state.folders.length) {
+        state.folders.push({
+            id: generateId(),
+            name: "UNSORTED"
+        });
+    }
+
+    const folderIds =
+        new Set(
+            state.folders.map(
+                folder => folder.id
+            )
+        );
+
+    const fallbackFolder =
+        state.folders.find(
+            folder =>
+                folder.name === "UNSORTED"
+        ) ||
+        state.folders[0];
+
+    state.songs.forEach(song => {
+
+        if (
+            !song.folder ||
+            !folderIds.has(song.folder)
+        ) {
+
+            song.folder =
+                fallbackFolder.id;
+        }
+    });
+
+
+    state.revision =
+        remoteRevision;
+
+    state.updatedAt =
+        remoteStamp ||
+        new Date().toISOString();
+
+    /*
     if (!remoteState || typeof remoteState !== "object") {
         return;
     }
@@ -266,8 +393,25 @@ function mergeStates(remoteState) {
         }
     );
 
-    saveState();
-    renderAll();
+    */
+
+    /* Persist locally WITHOUT bumping the revision we just
+       received and WITHOUT scheduling a push, so adopting
+       can never trigger a push/echo loop. */
+    saveState({ silent: true });
+    if (typeof isLiveEdit === "function" && isLiveEdit()) {
+
+        /* The user is typing in the Red Room: defer the UI
+           reconciliation until they leave the field so the
+           focused textarea is never torn down mid-edit. */
+        markRenderDeferred();
+
+    } else if (typeof renderAll === "function") {
+
+        renderAll();
+    }
+
+    return true;
 }
 
 
@@ -297,7 +441,7 @@ function startListening() {
                 return;
             }
 
-            mergeStates(data.state);
+            applyRemoteState(data.state);
             setSyncStatus("synced");
         },
         (error) => {

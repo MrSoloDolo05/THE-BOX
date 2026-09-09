@@ -63,4 +63,29 @@ let linerView = "lines";
 let lyricsSaveTimer = null;
 let cloudPushTimer = null;
 
+/* Realtime reconciliation must never tear down a focused
+   editor. These flags let the sync layer know the user is
+   actively typing so renderAll() can defer the Red Room
+   re-render until they leave the field. */
+let liveEditActive = false;
+let renderDeferredWhileEditing = false;
+
+function setLiveEdit(active) {
+    liveEditActive = active === true;
+}
+
+function isLiveEdit() {
+    return liveEditActive;
+}
+
+function markRenderDeferred() {
+    renderDeferredWhileEditing = true;
+}
+
+function consumeRenderDeferred() {
+    const wasDeferred = renderDeferredWhileEditing;
+    renderDeferredWhileEditing = false;
+    return wasDeferred;
+}
+
 window.searchResults = [];

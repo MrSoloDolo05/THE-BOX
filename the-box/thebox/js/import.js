@@ -43,6 +43,39 @@ function parseVerses(text) {
 }
 
 
+const SECTION_KEYWORDS = [
+    "PRE-CHORUS",
+    "POST-CHORUS",
+    "VERSE",
+    "CHORUS",
+    "BRIDGE",
+    "INTRO",
+    "OUTRO",
+    "INSTRUMENTAL",
+    "INTERLUDE",
+    "PRELUDE",
+    "SOLO",
+    "HOOK",
+    "TAG",
+    "BUILD",
+    "DROP",
+    "REFRRAIN",
+    "SECTION"
+];
+
+
+function normalizeSectionName(line) {
+
+    return String(line || "")
+        .trim()
+        .replace(/^\[|\]$/g, "")
+        .replace(/:+\s*$/g, "")
+        .replace(/^[-–—:\s]+|[-–—:\s]+$/g, "")
+        .trim()
+        .toUpperCase();
+}
+
+
 function isSectionHeader(line) {
 
     const value =
@@ -53,8 +86,28 @@ function isSectionHeader(line) {
         return false;
     }
 
-    /* Trailing colon signals a header. */
-    if (/:\s*$/.test(value)) {
+    /* Bracket headers: [Verse], [Chorus 1], [Pre-Chorus] */
+    if (/^\[.+\]\s*:?\s*$/.test(value)) {
+        return true;
+    }
+
+    /* Keyword + optional number + optional trailing colon,
+       case-insensitive: "verse 1:", "Chorus", "BRIDGE 2" */
+    if (
+        SECTION_KEYWORDS.some(keyword => {
+
+            const matcher = new RegExp(
+                "^" +
+                keyword
+                    .replace(/[-]/g, "\\-")
+                    .replace(/[()]/g, "\\$&") +
+                "(?:\\s+\\d+)?\\s*:?\\s*$",
+                "i"
+            );
+
+            return matcher.test(value);
+        })
+    ) {
         return true;
     }
 
@@ -69,10 +122,31 @@ function isSectionHeader(line) {
 
 function cleanSectionType(line) {
 
-    return String(line || "")
-        .replace(/:+\s*$/g, "")
-        .trim()
-        .toUpperCase() || "VERSE";
+    const normalized =
+        normalizeSectionName(line);
+
+    /* Match the longest keyword prefix so "PRE-CHORUS"
+       is not misread as "CHORUS". */
+    const keyword =
+        SECTION_KEYWORDS
+            .slice()
+            .sort(
+                (a, b) =>
+                    b.length - a.length
+            )
+            .find(word =>
+                normalized.startsWith(word)
+            ) || "SECTION";
+
+    const suffix =
+        normalized
+            .slice(keyword.length)
+            .trim();
+
+    return (
+        keyword +
+        (suffix ? " " + suffix : "")
+    );
 }
 
 
@@ -132,8 +206,37 @@ function parseSong(text) {
         sections.push(current);
     }
 
+    /* Fallback: no explicit section headers were found.
+       If the text has blank-line separated blocks, split it
+       into auto-labelled stanzas (VERSE 1, VERSE 2, ...). */
+    const stanzas =
+        String(text || "")
+            .split(/\r?\n\s*\r?\n/)
+            .map(block =>
+                block
+                    .replace(/\r?\n/g, "\n")
+                    .trim()
+            )
+            .filter(Boolean);
+
+    if (
+        !hasHeader &&
+        stanzas.length > 1
+    ) {
+
+        return {
+            title: title || "",
+            sections: stanzas.map(
+                (stanza, index) => ({
+                    type: "VERSE " + (index + 1),
+                    lyrics: stanza.split(/\r?\n/)
+                })
+            )
+        };
+    }
+
     return {
-        title: title || "UNTITLED",
+        title: title || "",
         sections: sections
     };
 }
@@ -330,7 +433,6 @@ function openImportModal() {
                 class="import-mode active"
                 data-mode="lines"
                 type="button"
-                onclick="setImportMode('lines', this)"
             >
                 LINES
             </button>
@@ -339,7 +441,6 @@ function openImportModal() {
                 class="import-mode"
                 data-mode="verses"
                 type="button"
-                onclick="setImportMode('verses', this)"
             >
                 VERSES
             </button>
@@ -348,7 +449,6 @@ function openImportModal() {
                 class="import-mode"
                 data-mode="song"
                 type="button"
-                onclick="setImportMode('song', this)"
             >
                 SONG
             </button>
@@ -399,8 +499,9 @@ function openImportModal() {
 
     if (confirm) {
 
-        confirm.onclick =
-            runImport;
+        modalConfirm.set(
+            runImport
+        );
     }
 
 
@@ -417,8 +518,6 @@ function openImportModal() {
 
     }, 50);
 
-
-    /* ---- file picker + drag / drop wiring ---- */
 
     const browse =
         document.getElementById(
@@ -541,8 +640,10 @@ function setImportMode(
             "Blocks separated by blank lines become VERSES.",
 
         song:
-            "“VERSE 1:”, “Chorus:” or ALL-CAPS headers " +
-            "become the sections of a new song."
+            "Section headers like [Verse], Chorus:, VERSE 1 " +
+            "or BRIDGE split the song into sections. If none " +
+            "are found, the text is split on blank lines into " +
+            "auto-labelled stanzas."
     };
 
     const hint =
@@ -741,4 +842,29 @@ function setupImport() {
                 openImportModal
             );
         });
+
+
+    /* -------------------------------------------------
+       IMPORT MODE DELEGATION (inside the shared modal)
+    -------------------------------------------------- */
+
+    const modalBody =
+        document.getElementById(
+            "modal-body"
+        );
+
+    if (modalBody) {
+
+        delegateClick(
+            modalBody,
+            ".import-mode",
+            (event, button) => {
+
+                setImportMode(
+                    button.dataset.mode,
+                    button
+                );
+            }
+        );
+    }
 }

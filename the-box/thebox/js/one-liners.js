@@ -275,21 +275,6 @@ function renderLiners() {
     }
 
 
-    const insertFn =
-        isLines
-            ? "insertLiner"
-            : "insertVerse";
-
-    const editFn =
-        isLines
-            ? "editLiner"
-            : "editVerse";
-
-    const deleteFn =
-        isLines
-            ? "deleteLiner"
-            : "deleteVerse";
-
     const cardClass =
         isLines
             ? ""
@@ -312,7 +297,10 @@ function renderLiners() {
 
 
                 return `
-                    <div class="liner ${cardClass}">
+                    <div
+                        class="liner ${cardClass}"
+                        data-item-id="${item.id}"
+                    >
 
                         <div class="liner-top">
 
@@ -343,7 +331,7 @@ function renderLiners() {
                                         ? `
                                             <button
                                                 type="button"
-                                                onclick="${insertFn}('${item.id}')"
+                                                data-action="insert-item"
                                                 title="Insert"
                                             >
                                                 ↳
@@ -354,7 +342,7 @@ function renderLiners() {
 
                                 <button
                                     type="button"
-                                    onclick="${editFn}('${item.id}')"
+                                    data-action="edit-item"
                                     title="Edit"
                                 >
                                     ✎
@@ -362,7 +350,7 @@ function renderLiners() {
 
                                 <button
                                     type="button"
-                                    onclick="${deleteFn}('${item.id}')"
+                                    data-action="delete-item"
                                     title="Delete"
                                 >
                                     ×
@@ -498,14 +486,25 @@ function deleteLiner(id) {
     }
 
 
-    state.trash.push({
+    const alreadyTrashed =
+        state.trash.some(
+            item =>
+                item.type === "liner" &&
+                item.data &&
+                item.data.id === id
+        );
 
-        id: generateId(),
+    if (!alreadyTrashed) {
 
-        type: "liner",
+        state.trash.push({
 
-        data: liner
-    });
+            id: generateId(),
+
+            type: "liner",
+
+            data: liner
+        });
+    }
 
 
     state.liners =
@@ -540,14 +539,25 @@ function deleteVerse(id) {
     }
 
 
-    state.trash.push({
+    const alreadyTrashed =
+        state.trash.some(
+            item =>
+                item.type === "verse" &&
+                item.data &&
+                item.data.id === id
+        );
 
-        id: generateId(),
+    if (!alreadyTrashed) {
 
-        type: "verse",
+        state.trash.push({
 
-        data: verse
-    });
+            id: generateId(),
+
+            type: "verse",
+
+            data: verse
+        });
+    }
 
 
     state.verses =
@@ -644,7 +654,6 @@ function openLinerPicker() {
                 class="picker-tab active"
                 data-picker-view="lines"
                 type="button"
-                onclick="setPickerView('lines', this)"
             >
                 LINES
             </button>
@@ -653,7 +662,6 @@ function openLinerPicker() {
                 class="picker-tab"
                 data-picker-view="verses"
                 type="button"
-                onclick="setPickerView('verses', this)"
             >
                 VERSES
             </button>
@@ -739,11 +747,6 @@ function renderPickerItems(
             ? state.liners
             : state.verses;
 
-    const insertFn =
-        view === "lines"
-            ? "insertLiner"
-            : "insertVerse";
-
     if (!items.length) {
 
         return `
@@ -758,7 +761,8 @@ function renderPickerItems(
         .map(
             item => `
                 <div
-                    onclick="${insertFn}('${item.id}')"
+                    class="picker-item"
+                    data-item-id="${item.id}"
                     style="
                         padding:15px;
                         border-bottom:1px solid rgba(255,255,255,.07);
@@ -1080,29 +1084,28 @@ function openEditModal(
 
     if (confirm) {
 
-        confirm.onclick =
-            function () {
+        modalConfirm.set(function () {
 
-                const input =
-                    document.getElementById(
-                        "edit-text-input"
-                    );
+            const input =
+                document.getElementById(
+                    "edit-text-input"
+                );
 
-                const text =
-                    input?.value.trim();
+            const text =
+                input?.value.trim();
 
-                if (!text) {
-                    return;
-                }
+            if (!text) {
+                return;
+            }
 
-                item.text = text;
+            item.text = text;
 
-                saveState();
+            saveState();
 
-                closeModal();
+            closeModal();
 
-                renderLiners();
-            };
+            renderLiners();
+        });
     }
 
 

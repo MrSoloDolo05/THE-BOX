@@ -264,6 +264,37 @@ function showView(view) {
     currentView = view;
 
     saveUIState();
+
+    try {
+
+        const currentHash =
+            typeof location !== "undefined"
+                ? String(location.hash || "")
+                : "";
+
+        const desiredHash =
+            "#view=" + view;
+
+        if (currentHash !== desiredHash) {
+
+            if (typeof history !== "undefined" &&
+                typeof history.replaceState === "function") {
+
+                history.replaceState(
+                    {},
+                    "",
+                    desiredHash
+                );
+            }
+        }
+
+    } catch (error) {
+
+        /* History/URL access may be restricted in some
+           environments (for example, file:// or sandboxed
+           iframes). In that case we still keep the in-memory
+           and localStorage state. */
+    }
 }
 
 
@@ -473,6 +504,25 @@ function openModal() {
 
     /* Lock background scroll while the modal is up. */
     refreshScrollLock();
+
+
+    /* Focus the first usable control so keyboard users (and
+       Enter key handling) have a predictable starting point. */
+    setTimeout(() => {
+
+        const first =
+            modal.querySelector(
+                "input:not([type=\"file\"]):not([type=\"hidden\"]), textarea, select"
+            );
+
+        if (first) {
+            try {
+                first.focus();
+            } catch (error) {
+                /* Focus may fail on hidden/disabled elements. */
+            }
+        }
+    }, 10);
 }
 
 
@@ -496,16 +546,7 @@ function closeModal() {
     refreshScrollLock();
 
 
-    const confirm =
-        document.getElementById(
-            "modal-confirm"
-        );
-
-
-    if (confirm) {
-
-        modalConfirm.clear();
-    }
+    modalConfirm.clear();
 }
 
 
@@ -515,30 +556,10 @@ function closeModal() {
 
 function setupModal() {
 
-    const modal =
+    const overlay =
         document.getElementById(
             "modal-overlay"
         );
-
-
-    if (!modal) {
-        return;
-    }
-
-
-    modal.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target ===
-                modal
-            ) {
-
-                closeModal();
-            }
-        }
-    );
 
 
     const cancelButton =
@@ -547,14 +568,83 @@ function setupModal() {
         );
 
 
-    if (cancelButton) {
+    const confirmButton =
+        document.getElementById(
+            "modal-confirm"
+        );
 
-        cancelButton.addEventListener(
+
+    if (overlay) {
+
+        /* Dismiss sharing modals via Cancel. */
+        if (cancelButton) {
+
+            cancelButton.addEventListener(
+                "click",
+                closeModal
+            );
+        }
+
+
+        /* Global Enter support for modal text inputs: if a
+           modal confirm handler is registered, Enter on text
+           inputs triggers it. This fixes name popups and other
+           simple create/edit modals without requiring each
+           modal function to bind its own keydown listener. */
+        overlay.addEventListener(
+            "keydown",
+            (event) => {
+
+                if (event.key !== "Enter") {
+                    return;
+                }
+
+                const target =
+                    event.target;
+
+                const isTextInput =
+                    target &&
+                    /^(input|textarea|select)$/i.test(target.tagName) &&
+                    target.type !== "file" &&
+                    target.type !== "hidden";
+
+                if (!isTextInput) {
+                    return;
+                }
+
+                if (event.shiftKey) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                /* Let a registered confirm handler decide
+                   whether the action should actually run. */
+                if (typeof modalConfirm._handler === "function") {
+
+                    modalConfirm._handler(event);
+                }
+            }
+        );
+    }
+
+
+    if (confirmButton) {
+
+        confirmButton.addEventListener(
             "click",
-            closeModal
+            () => {
+
+                if (typeof modalConfirm._handler === "function") {
+
+                    modalConfirm._handler();
+                }
+            }
         );
     }
 }
+
+
 
 
 /* =========================================================
@@ -693,6 +783,13 @@ function openMobileSidebar() {
             "aria-hidden",
             "false"
         );
+
+        /* Block pointer interactions on the underlying page
+           even before the CSS transition completes in some
+           browsers. The mobile media query already adds
+           `position: fixed` to `.locked`, so this is
+           strictly an accessibility/click-safety net. */
+        backdrop.style.pointerEvents = "auto";
     }
 
     /* Lock background scroll behind the drawer. */
@@ -859,6 +956,9 @@ function setupIntro() {
         );
 
 
+    /* The intro should render and animate on both desktop and
+       mobile. Do not skip it based on screen size, platform, or
+       media queries that were only intended to tweak positioning. */
     if (!intro) {
         return;
     }
@@ -929,6 +1029,40 @@ function setupIntro() {
             enterApp
         );
     }
+
+
+    /* Allow the auth button (when visible) to enter the app as
+       well, so the first interaction is consistent across
+       desktop and mobile. */
+    const authButton =
+        document.getElementById(
+            "auth-button"
+        );
+
+    if (authButton) {
+
+        authButton.addEventListener(
+            "click",
+            (event) => {
+
+                /* If Firebase sign-in is in progress, let that
+                   continue; otherwise enter the app immediately
+                   so the intro doesn't block the workspace. */
+                if (
+                    !authButton.classList.contains(
+                        "signed-in"
+                    )
+                ) {
+
+                    /* Only prevent default if we genuinely want
+                       to skip the intro; otherwise allow normal
+                       auth flow. */
+                }
+
+                enterApp();
+            }
+        );
+    }
 }
 
 
@@ -944,6 +1078,25 @@ function restoreLastView() {
     let view =
         uiState?.view ||
         "crate";
+
+
+    /* URL hash can override saved UI state so that a shared or
+       bookmarked link lands on the intended page even if the
+       stored UI state is stale. */
+    const hash =
+        typeof location !== "undefined"
+            ? String(location.hash || "").trim()
+            : "";
+
+    if (hash.startsWith("#view=")) {
+
+        const candidate =
+            hash.slice("#view=".length).split("/")[0];
+
+        if (candidate) {
+            view = candidate;
+        }
+    }
 
 
     if (view === "redroom") {
@@ -1383,6 +1536,27 @@ function setupCrate() {
                 showView(
                     "crate"
                 );
+            }
+        );
+    }
+
+
+    const newSongButton =
+        document.getElementById(
+            "create-song-button"
+        );
+
+
+    if (newSongButton) {
+
+        newSongButton.addEventListener(
+            "click",
+            () => {
+
+                /* Redirect to the RED ROOM page. If there is no
+                   song yet, `showView()` will create one and drop
+                   the user into it. */
+                showView("redroom");
             }
         );
     }
@@ -2188,6 +2362,8 @@ function initApp() {
     setupKeyboard();
 
 
+    /* Intro animation must play on both desktop and mobile.
+       Do not bypass it based on platform or screen size. */
     setupIntro();
 
 
@@ -2208,6 +2384,8 @@ function initApp() {
     renderAll();
 
     restoreLastView();
+
+    saveUIState();
 
 
     /* ---- Firebase sync ---- */

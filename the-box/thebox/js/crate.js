@@ -39,10 +39,16 @@ function renderCrate() {
                             folder.id
                     ).length;
 
+                const isTest =
+                    folder.name.trim() === "Test";
+
                 return `
                     <div
                         class="folder"
                         data-folder-id="${folder.id}"
+                        data-folder-color="${
+                            isTest ? "teal" : ""
+                        }"
                     >
 
                         <div class="folder-actions">
@@ -59,6 +65,7 @@ function renderCrate() {
                                 data-action="delete-folder"
                                 title="Delete"
                                 type="button"
+                                ${isTest ? "disabled" : ""}
                             >
                                 ×
                             </button>
@@ -314,6 +321,18 @@ function deleteFolder(id) {
         );
 
     if (!folder) {
+        return;
+    }
+
+
+    /* The Unsorted folder is a protected root folder: it can not
+       be deleted, cleared, or dragged into trash. */
+    if (folder.name === "UNSORTED") {
+
+        alert(
+            "The Unsorted folder can not be deleted."
+        );
+
         return;
     }
 
@@ -1035,10 +1054,25 @@ function saveFolderRename(id) {
     }
 
 
-    folder.name =
+    const next =
         input.value
             .trim()
             .toUpperCase();
+
+
+    /* The Unsorted folder is protected: it cannot be renamed
+       and it cannot be effectively removed by making it blank. */
+    if (folder.name === "UNSORTED") {
+
+        alert(
+            "The Unsorted folder cannot be renamed."
+        );
+
+        return;
+    }
+
+
+    folder.name = next;
 
 
     saveState();
@@ -1202,6 +1236,31 @@ function restoreTrash(id) {
     } else if (
         item.type === "folder"
     ) {
+
+        /* The Unsorted folder is protected. If it somehow ends
+           up in trash (migration, import, legacy data), treat
+           it as already existing and just remove it from trash
+           without creating a second copy or re-trashing it. */
+        if (
+            item.data &&
+            item.data.name === "UNSORTED"
+        ) {
+
+            state.trash =
+                state.trash.filter(
+                    row =>
+                        row.id !== id
+                );
+
+            saveState();
+
+            renderTrash();
+
+            renderCrate();
+
+            return;
+        }
+
 
         const folderExists =
             state.folders.some(

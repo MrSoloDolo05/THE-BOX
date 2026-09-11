@@ -65,6 +65,11 @@ function updateAuthButton() {
         button.textContent = "SIGN OUT";
         button.classList.add("signed-in");
     } else {
+
+    /* The app now requires manual login triggers. On load we
+       only observe the Firebase auth state and update the UI;
+       we never attempt to silently sign the user in. */
+
         button.textContent = "SIGN IN WITH GOOGLE";
         button.classList.remove("signed-in");
     }
@@ -84,25 +89,44 @@ function isSignedIn() {
 ========================================================= */
 
 async function initAuth() {
-    if (!firebaseAuth) return;
+    if (!firebaseAuth) {
+        return;
+    }
 
-    const handleUser = async (user) => {
-        if (user) {
-            currentUser = user;
-            updateAuthButton();
-            setSyncStatus("syncing");
-            await pullState();
-            startListening();
-            setSyncStatus("synced");
-        } else {
-            currentUser = null;
-            updateAuthButton();
-            stopListening();
-            setSyncStatus("offline");
+
+    /* The app now requires manual login triggers. On load we
+       only observe the Firebase auth state and update the UI;
+       we never attempt to silently sign the user in. */
+    firebaseAuth.onAuthStateChanged(
+        async (user) => {
+
+            if (user) {
+
+                currentUser = user;
+                updateAuthButton();
+                setSyncStatus("syncing");
+
+                try {
+                    await pullState();
+                } catch (error) {
+                    console.error(
+                        "Auth state pull failed:",
+                        error
+                    );
+                }
+
+                startListening();
+                setSyncStatus("synced");
+
+            } else {
+
+                currentUser = null;
+                updateAuthButton();
+                stopListening();
+                setSyncStatus("offline");
+            }
         }
-    };
-
-    firebaseAuth.onAuthStateChanged(handleUser);
+    );
 }
 
 async function signInWithGoogle() {

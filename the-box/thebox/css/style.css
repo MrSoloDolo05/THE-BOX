@@ -357,6 +357,21 @@ button {
         #071019;
 }
 
+[data-view="folder"] .app-background {
+    background:
+        radial-gradient(
+            circle at 75% 20%,
+            rgba(56,112,78,.30),
+            transparent 35%
+        ),
+        radial-gradient(
+            circle at 15% 85%,
+            rgba(30,80,50,.18),
+            transparent 40%
+        ),
+        #07120c;
+}
+
 [data-view="liners"] .app-background {
     background:
         radial-gradient(
@@ -628,6 +643,22 @@ button {
     font-size: 10px;
 }
 
+.small-btn.accent {
+    background: rgba(56,112,78,.22);
+
+    border-color: rgba(79,209,197,.35);
+
+    color: #d7f5ef;
+}
+
+.small-btn.accent:hover {
+    background: rgba(56,112,78,.34);
+
+    border-color: rgba(79,209,197,.6);
+
+    color: #ffffff;
+}
+
 .small-btn:hover {
     background: rgba(255,255,255,.08);
     color: white;
@@ -780,11 +811,29 @@ button {
 }
 
 .folder-icon {
-    color: #628db5;
+    color: #9fb6c8;
 
     font-size: 22px;
 
     margin-bottom: 28px;
+}
+
+/* Optional per-folder accent colors.
+   The app currently applies this only to the "Test" folder
+   using data-folder-color="teal". */
+.folder[data-folder-color="teal"] .folder-icon {
+    color: #4fd1c5;
+}
+
+.folder[data-folder-color="teal"] {
+    border-color: rgba(79,209,197,.35);
+    background: rgba(20,60,55,.18);
+}
+
+.folder[data-folder-color="teal"]:hover,
+.folder[data-folder-color="teal"].drag-over {
+    border-color: rgba(79,209,197,.7);
+    background: rgba(20,70,62,.32);
 }
 
 .folder-name {

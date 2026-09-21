@@ -283,7 +283,10 @@ function createFolder() {
 
             state.folders.push({
                 id: generateId(),
-                name: name.toUpperCase()
+                name: name.toUpperCase(),
+
+                modified:
+                    new Date().toISOString()
             });
 
             saveState();
@@ -373,9 +376,20 @@ function deleteFolder(id) {
             id: generateId(),
             type: "folder",
             data: folder,
-            songIds: songIds
+            songIds: songIds,
+
+            /* Tombstone timestamp used by the per-record sync
+               merge to order this deletion against stale copies. */
+            modified:
+                new Date().toISOString()
         });
     }
+
+
+    /* Durable deletion tombstone for the FOLDER only. The songs
+       that lived in it are re-homed to UNSORTED and keep their
+       own ids, so they are never marked as deleted. */
+    markRecordDeleted(id);
 
 
     state.folders =
@@ -400,6 +414,10 @@ function deleteFolder(id) {
             if (song.folder === id) {
                 song.folder =
                     unsorted.id;
+
+                /* Re-homing is a real edit, so it must outrank an
+                   older copy of the song on another device. */
+                touchSong(song);
             }
 
         });
@@ -411,6 +429,8 @@ function deleteFolder(id) {
             if (song.folder === id) {
                 song.folder =
                     state.folders[0].id;
+
+                touchSong(song);
             }
 
         });
@@ -625,9 +645,19 @@ function deleteSong(id) {
         state.trash.push({
             id: generateId(),
             type: "song",
-            data: song
+            data: song,
+
+            /* Tombstone timestamp used by the per-record sync
+               merge to order this deletion against stale copies. */
+            modified:
+                new Date().toISOString()
         });
     }
+
+
+    /* Durable deletion tombstone. Prevents a device that still
+       holds an older copy from resurrecting this song. */
+    markRecordDeleted(id);
 
 
     state.songs =
@@ -1074,6 +1104,9 @@ function saveFolderRename(id) {
 
     folder.name = next;
 
+    /* Renaming is a real edit: stamp it so the per-record sync
+       merge can order it against another device's copy. */
+    touchRecord(folder);
 
     saveState();
 
@@ -1233,6 +1266,14 @@ function restoreTrash(id) {
             );
         }
 
+
+        /* Explicit restore: clear the deletion tombstone and bump
+           the modified stamp so the restored copy outranks the
+           tombstone wherever it is still present. */
+        unmarkRecordDeleted(item.data.id);
+        touchRecord(item.data);
+        touchLiveRecord(item.data.id);
+
     } else if (
         item.type === "folder"
     ) {
@@ -1245,6 +1286,10 @@ function restoreTrash(id) {
             item.data &&
             item.data.name === "UNSORTED"
         ) {
+
+            /* The Unsorted folder must never carry a deletion
+               tombstone, or the sync merge would remove it. */
+            unmarkRecordDeleted(item.data.id);
 
             state.trash =
                 state.trash.filter(
@@ -1274,6 +1319,12 @@ function restoreTrash(id) {
                 item.data
             );
         }
+
+
+        /* Explicit restore: clear the deletion tombstone. */
+        unmarkRecordDeleted(item.data.id);
+        touchRecord(item.data);
+        touchLiveRecord(item.data.id);
 
 
         /*
@@ -1358,6 +1409,12 @@ function restoreTrash(id) {
             );
         }
 
+
+        /* Explicit restore: clear the deletion tombstone. */
+        unmarkRecordDeleted(item.data.id);
+        touchRecord(item.data);
+        touchLiveRecord(item.data.id);
+
     } else if (
         item.type === "verse"
     ) {
@@ -1374,6 +1431,12 @@ function restoreTrash(id) {
                 item.data
             );
         }
+
+
+        /* Explicit restore: clear the deletion tombstone. */
+        unmarkRecordDeleted(item.data.id);
+        touchRecord(item.data);
+        touchLiveRecord(item.data.id);
     }
 
 

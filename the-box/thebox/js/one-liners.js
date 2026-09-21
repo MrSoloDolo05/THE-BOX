@@ -37,6 +37,10 @@ function addLiner() {
         usedIn: [],
 
         created:
+            new Date().toISOString(),
+
+        /* Required by the per-record sync merge. */
+        modified:
             new Date().toISOString()
     });
 
@@ -83,6 +87,10 @@ function addVerse() {
         usedIn: [],
 
         created:
+            new Date().toISOString(),
+
+        /* Required by the per-record sync merge. */
+        modified:
             new Date().toISOString()
     });
 
@@ -502,9 +510,19 @@ function deleteLiner(id) {
 
             type: "liner",
 
-            data: liner
+            data: liner,
+
+            /* Tombstone timestamp used by the per-record sync
+               merge to order this deletion against stale copies. */
+            modified:
+                new Date().toISOString()
         });
     }
+
+
+    /* Durable deletion tombstone. Prevents a device that still
+       holds an older copy from resurrecting this liner. */
+    markRecordDeleted(id);
 
 
     state.liners =
@@ -555,9 +573,19 @@ function deleteVerse(id) {
 
             type: "verse",
 
-            data: verse
+            data: verse,
+
+            /* Tombstone timestamp used by the per-record sync
+               merge to order this deletion against stale copies. */
+            modified:
+                new Date().toISOString()
         });
     }
+
+
+    /* Durable deletion tombstone. Prevents a device that still
+       holds an older copy from resurrecting this verse. */
+    markRecordDeleted(id);
 
 
     state.verses =
@@ -906,6 +934,10 @@ function markUsed(
         item.usedIn.push(
             song.id
         );
+
+        /* Usage tracking is an edit to the liner/verse record, so
+           stamp it for the per-record sync merge. */
+        touchRecord(item);
     }
 }
 
@@ -1099,6 +1131,10 @@ function openEditModal(
             }
 
             item.text = text;
+
+            /* Bump the per-record modified stamp so the sync
+               merge can order this edit against other devices. */
+            touchRecord(item);
 
             saveState();
 

@@ -1,4 +1,4 @@
-/* =========================================================
+﻿/* =========================================================
    DATABASE / STORAGE
 ========================================================= */
 
@@ -7,6 +7,11 @@ const DATABASE_KEY = "the_box_app_state";
 const UI_STATE_KEY = "the_box_ui_state";
 
 const REVISION_KEY = "the_box_revision_clock";
+
+/* Per-device "last state known to be in sync with the cloud".
+   Lives in localStorage only (never inside the synced document)
+   and powers the 3-way merge in sync.js. */
+const SYNC_BASELINE_KEY = "the_box_sync_baseline";
 
 
 /* =========================================================
@@ -141,7 +146,10 @@ function createDefaultState() {
         folders: [
             {
                 id: generateId(),
-                name: "UNSORTED"
+                name: "UNSORTED",
+
+                modified:
+                    new Date().toISOString()
             }
         ],
 
@@ -149,7 +157,12 @@ function createDefaultState() {
 
         verses: [],
 
-        trash: []
+        trash: [],
+
+        /* Per-record deletion tombstones: id -> ISO timestamp.
+           The single source of truth for "this record is deleted",
+           and it survives trash being emptied. */
+        deletedRecordIds: {}
     };
 }
 
@@ -261,7 +274,17 @@ function loadState() {
 
             trash: Array.isArray(parsed.trash)
                 ? parsed.trash
-                : []
+                : [],
+
+            /* Per-record deletion tombstones. Absent in documents
+               written before the per-record merge existed, in which
+               case it starts empty and every existing record counts
+               as alive. */
+            deletedRecordIds:
+                parsed.deletedRecordIds &&
+                typeof parsed.deletedRecordIds === "object"
+                    ? parsed.deletedRecordIds
+                    : {}
         };
 
 
@@ -272,7 +295,10 @@ function loadState() {
         if (!state.folders.length) {
             state.folders.push({
                 id: generateId(),
-                name: "UNSORTED"
+                name: "UNSORTED",
+
+                modified:
+                    new Date().toISOString()
             });
         }
 
@@ -282,12 +308,24 @@ function loadState() {
                 folder.id = generateId();
             }
 
+            /* Stamping existing folders here too would NOT lose data:
+               the merge compares staleness by baseline change, not by
+               modified age. This is still scoped to folders that
+               genuinely lack a stamp. */
+            if (!folder.modified) {
+                folder.modified =
+                    state.updatedAt ||
+                    new Date().toISOString();
+            }
+
             if (
                 typeof folder.name !== "string" ||
                 !folder.name.trim()
             ) {
                 folder.name = "UNSORTED";
             }
+
+            return;
         });
 
 
@@ -416,6 +454,15 @@ function loadState() {
         });
 
 
+        /* -------------------------------------------------
+           SYNC MIGRATION
+           Additive and idempotent: stamps `modified` on legacy
+           records and creates the deletion-tombstone map. See
+           migrateSyncMetadata() for the exact rules.
+        ------------------------------------------------- */
+
+        migrateSyncMetadata(state);
+
         saveState();
 
     } catch (error) {
@@ -433,6 +480,104 @@ function loadState() {
 
 
 /* =========================================================
+   SYNC METADATA MIGRATION  (additive and idempotent)
+
+   Gives every record the metadata the per-record merge needs
+   WITHOUT changing, reordering or dropping anything the user
+   already has.
+
+   Rules:
+     * a record that already has `modified` keeps it exactly
+       as-is;
+     * a record without one inherits its own `created`, falling
+       back to the document `updatedAt`, so legacy records all
+       share one stable, deterministic stamp rather than looking
+       as though they were all just edited;
+     * deletedRecordIds starts empty, so no existing record is
+       ever treated as deleted by the upgrade;
+     * existing trash entries gain `deletedItemId` plus a
+       `modified`, so they keep being listed in trash;
+     * nothing is ever removed.
+
+   Safe to run any number of times.
+========================================================= */
+
+function migrateSyncMetadata(targetState) {
+
+    if (!targetState || typeof targetState !== "object") {
+        return targetState;
+    }
+
+    if (
+        !targetState.deletedRecordIds ||
+        typeof targetState.deletedRecordIds !== "object"
+    ) {
+        targetState.deletedRecordIds = {};
+    }
+
+    const fallback =
+        targetState.updatedAt ||
+        new Date().toISOString();
+
+    ["songs", "folders", "liners", "verses"].forEach(collection => {
+
+        (targetState[collection] || []).forEach(record => {
+
+            if (!record) {
+                return;
+            }
+
+            if (!record.modified) {
+                record.modified =
+                    record.created || fallback;
+            }
+        });
+    });
+
+
+    (targetState.trash || []).forEach(item => {
+
+        if (!item || typeof item !== "object") {
+            return;
+        }
+
+        /* The record's own id identifies the tombstone. Legacy
+           entries only wrapped the record in `data`, so derive the
+           id from there once and keep it. */
+        if (!item.deletedItemId && item.data && item.data.id) {
+            item.deletedItemId = item.data.id;
+        }
+
+        /* Deliberately falls back to the wrapped record's own
+           timestamp, never to "now". That keeps a legacy tombstone
+           in step with the copy it describes instead of making it
+           look newer than a restore. */
+        if (!item.modified) {
+
+            item.modified =
+                (item.data && item.data.modified) ||
+                (item.data && item.data.created) ||
+                fallback;
+        }
+    });
+
+
+    /* A tombstone against the UNSORTED folder would delete the one
+       folder the application guarantees to have. */
+    const unsortedFolder =
+        (targetState.folders || []).find(
+            folder => folder && folder.name === "UNSORTED"
+        );
+
+    if (unsortedFolder) {
+        delete targetState.deletedRecordIds[unsortedFolder.id];
+    }
+
+    return targetState;
+}
+
+
+/* =========================================================
    CLEAR DATABASE
 ========================================================= */
 
@@ -443,6 +588,11 @@ function clearDatabase() {
     );
 
     state = createDefaultState();
+
+    /* Drop this device's sync baseline too: it describes a
+       library that no longer exists, and a stale baseline would
+       make the next merge resurrect deleted records. */
+    clearSyncBaseline();
 
     currentSongId = null;
     currentSectionId = null;
@@ -553,6 +703,10 @@ function importDatabase(event) {
                 DATABASE_KEY
             );
 
+            /* An import replaces the library wholesale, so this
+               device's sync baseline is meaningless afterwards. */
+            clearSyncBaseline();
+
             saveState();
 
             currentSongId = null;
@@ -583,4 +737,315 @@ function importDatabase(event) {
 
     /* Allow the same file to be selected again */
     event.target.value = "";
+
+
+
+}
+/* =========================================================
+   SYNC HELPERS
+   Used by the per-record merge in sync.js
+   ========================================================= */
+
+function getDeletedRecordIds() {
+    return state.deletedRecordIds || {};
+}
+
+function setDeletedRecordIds(map) {
+    state.deletedRecordIds = map && typeof map === "object" ? map : {};
+}
+
+function isRecordDeleted(recordId) {
+    const ids = getDeletedRecordIds();
+    return recordId in ids;
+}
+
+function markRecordDeleted(recordId) {
+    const ids = getDeletedRecordIds();
+    ids[recordId] = new Date().toISOString();
+    setDeletedRecordIds(ids);
+}
+
+function unmarkRecordDeleted(recordId) {
+    const ids = getDeletedRecordIds();
+    delete ids[recordId];
+    setDeletedRecordIds(ids);
+}
+
+function touchRecord(record) {
+    if (record) {
+        record.modified = new Date().toISOString();
+    }
+}
+
+
+/* =========================================================
+   SYNC SUPPORT (per-record merge)
+   Backing helpers for the per-record merge in sync.js.
+   Nothing here deletes or rewrites user data: these helpers
+   only stamp timestamps and maintain a compact per-device
+   baseline used for 3-way change detection.
+========================================================= */
+
+/* Every collection whose records are merged individually. */
+const SYNC_COLLECTIONS = [
+    "songs",
+    "folders",
+    "liners",
+    "verses",
+    "trash"
+];
+
+/* Live collections (trash is excluded: it holds tombstones). */
+const SYNC_LIVE_COLLECTIONS = [
+    "songs",
+    "folders",
+    "liners",
+    "verses"
+];
+
+
+/* Bump `modified` on every live copy of a record id. Used when a
+   record is restored from trash so that the restored copy always
+   outranks the tombstone that marked it deleted. */
+function touchLiveRecord(recordId) {
+
+    const stamp = new Date().toISOString();
+
+    SYNC_LIVE_COLLECTIONS.forEach(collection => {
+
+        (state[collection] || []).forEach(record => {
+
+            if (record && record.id === recordId) {
+                record.modified = stamp;
+            }
+        });
+    });
+}
+
+
+/* ---------------------------------------------------------
+   CONTENT DIGEST
+   Structure-aware FNV-1a hash of a record. Object keys are
+   sorted before hashing, so a Firestore round trip that
+   reorders fields can never look like a user edit. No large
+   intermediate string is built, keeping this cheap even for
+   libraries full of lyrics.
+--------------------------------------------------------- */
+
+function mixHash(text, hash) {
+
+    for (let index = 0; index < text.length; index++) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+
+    return hash >>> 0;
+}
+
+function digestValue(value, hash) {
+
+    if (value === null) {
+        return mixHash("n", hash);
+    }
+
+    const type = typeof value;
+
+    if (type === "undefined") {
+        return mixHash("u", hash);
+    }
+
+    if (type === "number" || type === "boolean") {
+        return mixHash("p" + String(value), hash);
+    }
+
+    if (type === "string") {
+        /* Length is mixed in separately so two different strings
+           of different lengths cannot hash to the same value. */
+        hash = mixHash("s" + value.length, hash);
+        return mixHash(value, hash);
+    }
+
+    if (Array.isArray(value)) {
+
+        hash = mixHash("[" + value.length, hash);
+
+        value.forEach(item => {
+            hash = digestValue(item, hash);
+        });
+
+        return mixHash("]", hash);
+    }
+
+    if (type === "object") {
+
+        const keys = Object.keys(value).sort();
+
+        hash = mixHash("{" + keys.length, hash);
+
+        keys.forEach(key => {
+            hash = mixHash(key, hash);
+            hash = digestValue(value[key], hash);
+        });
+
+        return mixHash("}", hash);
+    }
+
+    return mixHash("x", hash);
+}
+
+function digestRecord(record) {
+
+    if (!record) {
+        return null;
+    }
+
+    return digestValue(record, 0x811c9dc5).toString(16);
+}
+
+
+
+/* ---------------------------------------------------------
+   BASELINE (per device, localStorage only)
+   A map of collection -> { recordId: digest }, plus the
+   deletion tombstones last known to be in the cloud. This is
+   what lets the merge distinguish
+     "this device changed the record"   from
+     "this device is simply out of date".
+   It is intentionally NOT part of the synced document.
+--------------------------------------------------------- */
+
+function buildSyncBaseline(snapshot) {
+
+    const source = snapshot || state;
+    const baseline = {};
+
+    /* Scoped to the account: signing a different user in on the same
+       browser must not inherit the previous user's digests. */
+    baseline.uid =
+        currentUser && currentUser.uid
+            ? currentUser.uid
+            : null;
+
+    SYNC_COLLECTIONS.forEach(collection => {
+
+        const map = {};
+
+        (source[collection] || []).forEach(record => {
+
+            if (record && record.id) {
+                map[record.id] = digestRecord(record);
+            }
+        });
+
+        baseline[collection] = map;
+    });
+
+    baseline.deletedRecordIds = Object.assign(
+        {},
+        source.deletedRecordIds || {}
+    );
+
+    return baseline;
+}
+
+function getSyncBaseline() {
+
+    try {
+
+        const raw =
+            localStorage.getItem(SYNC_BASELINE_KEY);
+
+        if (!raw) {
+            return null;
+        }
+
+        const parsed = JSON.parse(raw);
+
+        if (!parsed || typeof parsed !== "object") {
+            return null;
+        }
+
+        /* A baseline belonging to another account is worse than no
+           baseline at all: its digests describe a different library. */
+        const uid =
+            currentUser && currentUser.uid
+                ? currentUser.uid
+                : null;
+
+        if (parsed.uid !== uid) {
+            return null;
+        }
+
+        return parsed;
+
+    } catch (error) {
+
+        console.error(
+            "Could not read sync baseline:",
+            error
+        );
+
+        return null;
+    }
+}
+
+function setSyncBaseline(baseline) {
+
+    try {
+
+        localStorage.setItem(
+            SYNC_BASELINE_KEY,
+            JSON.stringify(baseline)
+        );
+
+    } catch (error) {
+
+        /* Quota or private-mode failure. The merge keeps working;
+           it simply falls back to per-record last-writer-wins for
+           records this device cannot prove it did not touch. */
+        console.error(
+            "Could not persist sync baseline:",
+            error
+        );
+    }
+}
+
+function clearSyncBaseline() {
+
+    try {
+        localStorage.removeItem(SYNC_BASELINE_KEY);
+    } catch (error) {
+
+        console.error(
+            "Could not clear sync baseline:",
+            error
+        );
+    }
+}
+
+
+/* ---------------------------------------------------------
+   STATE SNAPSHOT
+   Copy of the syncable collections so a merge can run without
+   observing mid-flight UI mutations.
+--------------------------------------------------------- */
+
+function captureSyncState(source) {
+
+    const from = source || state;
+    const snapshot = {};
+
+    SYNC_COLLECTIONS.forEach(collection => {
+        snapshot[collection] = from[collection] || [];
+    });
+
+    snapshot.deletedRecordIds = Object.assign(
+        {},
+        from.deletedRecordIds || {}
+    );
+
+    snapshot.updatedAt = from.updatedAt || "";
+    snapshot.revision = Number(from.revision || 0);
+
+    return snapshot;
 }

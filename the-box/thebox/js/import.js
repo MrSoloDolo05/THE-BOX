@@ -273,6 +273,8 @@ function importLines(text) {
             text: line,
             usedIn: [],
             created:
+                new Date().toISOString(),
+            modified:
                 new Date().toISOString()
         });
 
@@ -320,6 +322,8 @@ function importVerses(text) {
             text: verse,
             usedIn: [],
             created:
+                new Date().toISOString(),
+            modified:
                 new Date().toISOString()
         });
 

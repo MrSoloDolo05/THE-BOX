@@ -158,6 +158,9 @@ function renderSections() {
                                     : ""
                             }"
                             data-section-id="${section.id}"
+                            role="button"
+                            tabindex="0"
+                            title="Select section"
                         >
 
                             <div class="section-top">
@@ -172,14 +175,6 @@ function renderSections() {
                                 >
 
                                 <div class="section-actions">
-
-                                    <button
-                                        type="button"
-                                        data-action="select-section"
-                                        title="Select section"
-                                    >
-                                        SELECT
-                                    </button>
 
                                     <button
                                         type="button"

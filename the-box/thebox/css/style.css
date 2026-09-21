@@ -24,6 +24,18 @@
     --silver: #aeb2b7;
     --silverDark: #111315;
 
+    --verse: #22352b;
+    --verseBorder: rgba(143,182,148,.34);
+    --verseText: #eef4ea;
+    --verseMeta: #9eb8a4;
+    --lineCard: #16241c;
+    --lineBorder: rgba(143,182,148,.20);
+    --lineText: #dde7d8;
+    --lineMeta: #8ea693;
+    --folderOpen: #d9e9fb;
+    --folderOpenBorder: rgba(147,188,230,.60);
+    --folderOpenTint: rgba(64,125,190,.20);
+
     --transition: 500ms cubic-bezier(.22,.8,.25,1);
 }
 
@@ -147,6 +159,22 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.intro-mark {
+    position: relative;
+    z-index: 3;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.intro.loaded .intro-mark {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .intro-title {
@@ -465,6 +493,9 @@ button {
 }
 
 .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-family: "DM Mono", monospace;
     font-size: 13px;
     letter-spacing: .2em;
@@ -472,6 +503,13 @@ button {
     margin-bottom: 6px;
 
     cursor: pointer;
+}
+
+.brand-mark {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: block;
 }
 
 .brand-tagline {
@@ -805,6 +843,22 @@ button {
     transform: translateY(-2px);
 }
 
+.folder.is-open {
+    border-color: var(--folderOpenBorder);
+    background: linear-gradient(180deg, rgba(217,233,251,.13), rgba(217,233,251,.07));
+    box-shadow:
+        0 0 0 1px rgba(147,188,230,.18),
+        0 0 28px rgba(64,125,190,.14);
+}
+
+.folder.is-open .folder-name {
+    color: var(--folderOpen);
+}
+
+.folder.is-open .folder-icon {
+    color: #9cc4e8;
+}
+
 .folder.drag-over {
     box-shadow:
         0 0 30px rgba(60,120,180,.15);
@@ -1086,9 +1140,9 @@ button {
 .liner {
     padding: 22px;
 
-    background: rgba(35,85,50,.1);
+    background: var(--lineCard);
 
-    border: 1px solid rgba(60,120,80,.14);
+    border: 1px solid var(--lineBorder);
 
     transition: .25s ease;
 
@@ -1096,7 +1150,7 @@ button {
 }
 
 .liner:hover {
-    border-color: rgba(80,150,100,.35);
+    border-color: var(--verseBorder);
 }
 
 .liner-top {
@@ -1111,6 +1165,7 @@ button {
     flex: 1;
 
     font-size: 14px;
+    color: var(--lineText);
 
     line-height: 1.6;
 }
@@ -1118,7 +1173,7 @@ button {
 .liner-meta {
     font-family: "DM Mono", monospace;
 
-    color: #506257;
+    color: var(--lineMeta);
 
     font-size: 8px;
 
@@ -1261,17 +1316,18 @@ button {
     align-self: flex-end;
 }
 
-.verse-card {
-    background: rgba(35,60,90,.1);
+.liner.verse-card {
+    background: var(--verse);
 
-    border-color: rgba(80,120,170,.14);
+    border-color: var(--verseBorder);
 }
 
-.verse-card:hover {
-    border-color: rgba(100,150,220,.35);
+.liner.verse-card:hover {
+    border-color: rgba(180,220,190,.55);
 }
 
 .verse-text {
+    color: var(--verseText);
     white-space: pre-wrap;
 
     line-height: 1.7;
@@ -1333,6 +1389,67 @@ button {
     font-family: inherit;
 }
 
+
+/* =========================================================
+   UI POLISH — spacing, hierarchy, focus, cards, import
+   ========================================================= */
+
+.hero {
+    display: grid;
+    gap: 10px;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.song-row,
+.liner,
+.folder {
+    border-radius: 8px;
+}
+
+.song-row {
+    align-items: center;
+}
+
+.empty-state {
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 22px 18px;
+    text-align: left;
+    line-height: 1.8;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid rgba(240,238,233,.55);
+    outline-offset: 2px;
+}
+
+.add-song input:focus,
+.add-liner input:focus,
+.add-verse textarea:focus,
+.tool-input:focus,
+.import-input:focus {
+    border-color: rgba(240,238,233,.34);
+    background: rgba(255,255,255,.055);
+}
 
 .import-modes {
     display: flex;
@@ -1438,6 +1555,54 @@ button {
     width: 100%;
 }
 
+.import-modes {
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.025);
+}
+
+.import-mode {
+    border-radius: 7px;
+    padding: 12px 10px;
+}
+
+.import-mode.active {
+    background: rgba(240,238,233,.10);
+    border-color: rgba(240,238,233,.26);
+}
+
+.import-hint {
+    font-size: 12px;
+    line-height: 1.7;
+    margin: 0 0 12px;
+}
+
+.import-input {
+    min-height: 150px;
+    padding: 14px;
+    line-height: 1.7;
+    border-radius: 8px;
+}
+
+.import-zone {
+    display: grid;
+    place-items: center;
+    gap: 6px;
+    min-height: 104px;
+    padding: 20px 16px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: .14em;
+}
+
+#import-browse {
+    width: 100%;
+    justify-content: center;
+}
+
 .import-result {
     margin-top: 14px;
 
@@ -1528,6 +1693,12 @@ button {
         rgba(255,255,255,.025);
 
     transition: .25s ease;
+    cursor: pointer;
+}
+
+.song-section:focus-visible {
+    outline: 2px solid rgba(240,238,233,.55);
+    outline-offset: 2px;
 }
 
 .song-section:hover {

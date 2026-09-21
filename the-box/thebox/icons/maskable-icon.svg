@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="THE BOX app icon with safe padding">
+  <title>THE BOX</title>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#070708"/>
+  <g fill="none" stroke="#f0eee9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="131" y="174" width="250" height="188" rx="28" stroke-width="28"/>
+    <path d="M131 210 L256 276 L381 210" stroke-width="28"/>
+  </g>
+</svg>

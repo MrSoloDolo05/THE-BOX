@@ -1007,6 +1007,17 @@ function setupIntro() {
 
         currentFolderId = null;
 
+        /* Clear the folder open highlight without changing
+           navigation behavior. */
+        document
+            .querySelectorAll(".folder.is-open")
+            .forEach(element => {
+
+                element.classList.remove(
+                    "is-open"
+                );
+            });
+
         showView("crate");
 
 
@@ -1929,14 +1940,74 @@ function setupRedRoom() {
             }
         );
 
-        delegateClick(
-            sectionsContainer,
-            '[data-action="select-section"]',
-            (event, el) => {
+        /* Card click selects a section, but no inner editing or
+           management control may bubble into selection. */
+        sectionsContainer.addEventListener(
+            "click",
+            event => {
+
+                const card =
+                    event.target.closest(
+                        ".song-section"
+                    );
+
+                if (
+                    !card ||
+                    !sectionsContainer.contains(
+                        card
+                    )
+                ) {
+
+                    return;
+                }
+
+                if (
+                    event.target.closest(
+                        "button, input, textarea, select, a, [data-no-select]"
+                    )
+                ) {
+
+                    return;
+                }
 
                 setCurrentSection(
-                    el.closest(".song-section")
-                        .dataset.sectionId
+                    card.dataset.sectionId
+                );
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key !== "Enter" &&
+                    event.key !== " "
+                ) {
+
+                    return;
+                }
+
+                const card =
+                    event.target.closest(
+                        ".song-section"
+                    );
+
+                if (
+                    !card ||
+                    event.target !== card ||
+                    !sectionsContainer.contains(
+                        card
+                    )
+                ) {
+
+                    return;
+                }
+
+                event.preventDefault();
+
+                setCurrentSection(
+                    card.dataset.sectionId
                 );
             }
         );

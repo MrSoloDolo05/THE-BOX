@@ -42,9 +42,17 @@ function renderCrate() {
                 const isTest =
                     folder.name.trim() === "Test";
 
+                const isOpen =
+                    folder.id ===
+                    currentFolderId;
+
                 return `
                     <div
-                        class="folder"
+                        class="folder${
+                            isOpen
+                                ? " is-open"
+                                : ""
+                        }"
                         data-folder-id="${folder.id}"
                         data-folder-color="${
                             isTest ? "teal" : ""
@@ -925,6 +933,19 @@ function openFolder(id) {
         title.textContent =
             folder.name;
     }
+
+    /* Keep the folder grid highlight in sync without changing
+       navigation behavior. */
+    document
+        .querySelectorAll(".folder")
+        .forEach(element => {
+
+            element.classList.toggle(
+                "is-open",
+                element.dataset.folderId ===
+                id
+            );
+        });
 
     showView("folder");
 }

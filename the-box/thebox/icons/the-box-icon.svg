@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="THE BOX app icon">
+  <title>THE BOX</title>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#070708"/>
+  <g fill="none" stroke="#f0eee9" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="110" y="156" width="292" height="220" rx="34" stroke-width="30"/>
+    <path d="M110 196 L256 272 L402 196" stroke-width="30"/>
+  </g>
+</svg>

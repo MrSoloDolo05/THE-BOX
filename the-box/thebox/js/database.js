@@ -759,9 +759,39 @@ function isRecordDeleted(recordId) {
     return recordId in ids;
 }
 
+function deletionStampFor(recordId) {
+
+    let newest = "";
+
+    SYNC_LIVE_COLLECTIONS.forEach(collection => {
+
+        (state[collection] || []).forEach(record => {
+
+            if (record && record.id === recordId && record.modified) {
+                newest =
+                    record.modified > newest
+                        ? record.modified
+                        : newest;
+            }
+        });
+    });
+
+    let stamp =
+        new Date().toISOString();
+
+    /* Same-millisecond clocks are common on fast devices. A tombstone
+       that merely ties the record's modified loses the strict-newer
+       check in the merge and the stale copy resurrects. */
+    if (stamp <= newest) {
+        stamp = newest + ".1";
+    }
+
+    return stamp;
+}
+
 function markRecordDeleted(recordId) {
     const ids = getDeletedRecordIds();
-    ids[recordId] = new Date().toISOString();
+    ids[recordId] = deletionStampFor(recordId);
     setDeletedRecordIds(ids);
 }
 

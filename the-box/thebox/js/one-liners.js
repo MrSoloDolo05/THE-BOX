@@ -158,6 +158,17 @@ function setLinerView(
 
     linerView = view;
 
+    /* Two-tone environment hook for CSS: light LINE mode vs dark
+       VERSE mode. Pure presentation; no data behavior changes. */
+    document
+        .getElementById("app")
+        ?.setAttribute(
+            "data-liners",
+            view === "verses"
+                ? "verses"
+                : "lines"
+        );
+
 
     document
         .querySelectorAll(

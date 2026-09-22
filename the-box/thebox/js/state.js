@@ -61,6 +61,7 @@ let linerFilter = "all";
 let linerView = "lines";
 
 let lyricsSaveTimer = null;
+let titleSaveTimer = null;
 let cloudPushTimer = null;
 
 /* Realtime reconciliation must never tear down a focused

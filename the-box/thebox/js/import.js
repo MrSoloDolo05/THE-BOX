@@ -154,6 +154,21 @@ function cleanSectionType(line) {
    PARSE SONG
 ========================================================= */
 
+function titleFromFilename(name) {
+
+    const base =
+        String(name || "")
+            .split(/[\\/]/)
+            .pop() || "";
+
+    return base
+        .replace(/\.(txt|md|markdown|text)$/i, "")
+        .replace(/[_.]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+
 function parseSong(text) {
 
     const nonEmpty =
@@ -187,7 +202,7 @@ function parseSong(text) {
         }
 
         if (!title && hasHeader) {
-            title = line;
+            title = line.trim();
             return;
         }
 
@@ -344,7 +359,7 @@ function importVerses(text) {
    IMPORT AS SONG
 ========================================================= */
 
-function importAsSong(text) {
+function importAsSong(text, filename) {
 
     const parsed =
         parseSong(text);
@@ -362,9 +377,19 @@ function importAsSong(text) {
     const now =
         new Date().toISOString();
 
+    /* Title priority: explicit first line, then the source filename
+       ("My New Song.txt" -> "My New Song"), then existing fallback.
+       The chosen title line is already excluded from lyric content
+       by parseSong(), so lyrics are never destroyed. */
+    const filenameTitle =
+        titleFromFilename(filename || lastImportFilename || "");
+
     const song = {
         id: generateId(),
-        title: parsed.title,
+        title:
+            (parsed.title && parsed.title.trim()) ||
+            filenameTitle ||
+            "Untitled",
         status: "Draft",
         folder:
             defaultFolder
@@ -675,11 +700,16 @@ function setImportMode(
    READ IMPORT FILE
 ========================================================= */
 
+let lastImportFilename = "";
+
 function readImportFile(file) {
 
     if (!file) {
         return;
     }
+
+    lastImportFilename =
+        (file && file.name) || "";
 
     const reader =
         new FileReader();
@@ -772,7 +802,7 @@ function runImport() {
 
     if (importMode === "song") {
 
-        if (importAsSong(text)) {
+        if (importAsSong(text, lastImportFilename)) {
 
             if (result) {
 

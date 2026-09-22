@@ -1564,10 +1564,11 @@ function setupCrate() {
             "click",
             () => {
 
-                /* Redirect to the RED ROOM page. If there is no
-                   song yet, `showView()` will create one and drop
-                   the user into it. */
-                showView("redroom");
+                /* The NEW SONG button must always create a genuinely
+                   new song. Generic RED ROOM navigation may reuse the
+                   current or most recent song, but this explicit
+                   button must not. */
+                createSong();
             }
         );
     }
@@ -1815,8 +1816,28 @@ function setupRedRoom() {
     if (title) {
 
         title.addEventListener(
+            "focus",
+            () => {
+
+                if (typeof beginLiveEdit === "function") {
+                    beginLiveEdit();
+                }
+            }
+        );
+
+        title.addEventListener(
             "input",
             updateSongTitle
+        );
+
+        title.addEventListener(
+            "blur",
+            () => {
+
+                if (typeof endLiveEdit === "function") {
+                    endLiveEdit();
+                }
+            }
         );
     }
 
@@ -1927,6 +1948,53 @@ function setupRedRoom() {
         );
 
     if (sectionsContainer) {
+
+        /* Focusin/focusout bubble, unlike focus/blur, so one pair
+           covers all current and future section editors. */
+        sectionsContainer.addEventListener(
+            "focusin",
+            event => {
+
+                const editor =
+                    event.target.closest(
+                        ".lyrics-editor, .section-type"
+                    );
+
+                if (
+                    editor &&
+                    sectionsContainer.contains(editor) &&
+                    typeof beginLiveEdit === "function"
+                ) {
+
+                    beginLiveEdit();
+                }
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "focusout",
+            event => {
+
+                const next =
+                    event.relatedTarget;
+
+                /* Moving between two section editors is still live
+                   editing; only leaving the container ends it. */
+                if (
+                    next &&
+                    next.closest &&
+                    next.closest(".lyrics-editor, .section-type") &&
+                    sectionsContainer.contains(next)
+                ) {
+
+                    return;
+                }
+
+                if (typeof endLiveEdit === "function") {
+                    endLiveEdit();
+                }
+            }
+        );
 
         delegateChange(
             sectionsContainer,

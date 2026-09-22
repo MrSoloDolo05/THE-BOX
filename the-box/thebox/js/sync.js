@@ -276,7 +276,9 @@ async function runPushTransaction(docRef) {
     });
 
     /* Adopt exactly what the cloud now holds so that every device
-       converges on the same document. */
+       converges on the same document. The focused Red Room editor
+       is never rebuilt by this: adoptMergedState() defers the UI
+       reconciliation while live editing. */
     adoptMergedState(mergedState);
 
     rememberSyncedSignature(mergedState);
@@ -1235,7 +1237,40 @@ function adoptMergedState(merged) {
 
     } else if (typeof renderAll === "function") {
 
-        renderAll();
+        /* renderAll() rebuilds the Red Room editors. While the
+           writer is focused, re-render everything EXCEPT the Red
+           Room; it reconciles on blur via the deferred flag. */
+        if (
+            typeof isLiveEdit === "function" &&
+            isLiveEdit() &&
+            typeof isRedRoomEditorFocused === "function" &&
+            isRedRoomEditorFocused()
+        ) {
+
+            if (typeof renderCrate === "function") {
+                renderCrate();
+            }
+
+            if (typeof renderFolderSongsIfNeeded === "function") {
+                renderFolderSongsIfNeeded();
+            }
+
+            if (typeof renderLiners === "function") {
+                renderLiners();
+            }
+
+            if (typeof renderTrash === "function") {
+                renderTrash();
+            }
+
+            if (typeof renderSearchResults === "function") {
+                renderSearchResults(window.searchResults || []);
+            }
+
+            markRenderDeferred();
+        } else {
+            renderAll();
+        }
     }
 }
 

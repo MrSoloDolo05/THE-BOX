@@ -161,22 +161,6 @@ button {
     justify-content: center;
 }
 
-.intro-mark {
-    position: relative;
-    z-index: 3;
-    width: 56px;
-    height: 56px;
-    margin-bottom: 20px;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 700ms ease, transform 700ms ease;
-}
-
-.intro.loaded .intro-mark {
-    opacity: 1;
-    transform: translateY(0);
-}
-
 .intro-title {
     position: relative;
     z-index: 3;
@@ -398,6 +382,15 @@ button {
             transparent 40%
         ),
         #07120c;
+}
+
+[data-liners="verses"] .app-background {
+    background:
+        radial-gradient(
+            circle at center,
+            #0f1f16 0%,
+            #060b08 65%
+        );
 }
 
 [data-view="liners"] .app-background {
@@ -820,6 +813,9 @@ button {
 
 .folder {
     position: relative;
+    color: #0c1826;
+    background: linear-gradient(180deg, #e8f2fd 0%, #cfE3f8 100%);
+    border-color: rgba(147,188,230,.75);
 
     min-height: 125px;
 
@@ -836,7 +832,8 @@ button {
 
 .folder:hover,
 .folder.drag-over {
-    border-color: rgba(100,150,200,.5);
+    background: linear-gradient(180deg, #f2f8ff 0%, #d8eafb 100%);
+    border-color: rgba(147,188,230,.9);
 
     background: rgba(40,80,120,.22);
 
@@ -844,19 +841,19 @@ button {
 }
 
 .folder.is-open {
-    border-color: var(--folderOpenBorder);
-    background: linear-gradient(180deg, rgba(217,233,251,.13), rgba(217,233,251,.07));
+    border-color: #4f83c2;
+    background: linear-gradient(180deg, #ffffff 0%, #d3e7fb 100%);
     box-shadow:
         0 0 0 1px rgba(147,188,230,.18),
         0 0 28px rgba(64,125,190,.14);
 }
 
 .folder.is-open .folder-name {
-    color: var(--folderOpen);
+    color: #0c1826;
 }
 
 .folder.is-open .folder-icon {
-    color: #9cc4e8;
+    color: #2f5b87;
 }
 
 .folder.drag-over {
@@ -865,7 +862,7 @@ button {
 }
 
 .folder-icon {
-    color: #9fb6c8;
+    color: #3f6d9e;
 
     font-size: 22px;
 
@@ -892,10 +889,11 @@ button {
 
 .folder-name {
     font-size: 13px;
+    color: #0c1826;
 }
 
 .folder-count {
-    color: #555f68;
+    color: #47637f;
 
     font-family: "DM Mono", monospace;
 
@@ -1135,6 +1133,28 @@ button {
     display: grid;
 
     gap: 8px;
+}
+
+[data-liners="lines"] .liner {
+    background: #dce9d4;
+    border-color: rgba(74,110,80,.4);
+}
+
+[data-liners="lines"] .liner-text {
+    color: #1c2b20;
+}
+
+[data-liners="lines"] .liner-meta {
+    color: #4f6a54;
+}
+
+[data-liners="verses"] .liner.verse-card {
+    background: #12241a;
+    border-color: rgba(143,182,148,.28);
+}
+
+[data-liners="verses"] .verse-text {
+    color: #e4eee2;
 }
 
 .liner {

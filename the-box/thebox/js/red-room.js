@@ -20,6 +20,77 @@ function getCurrentSong() {
 }
 
 
+/* Live-edit protection: while the writer is focused in the Red
+   Room, background sync may merge state but must not rebuild the
+   active editor DOM node. Blur flushes any pending debounced
+   save and reconciles a deferred render safely. */
+function beginLiveEdit() {
+
+    if (typeof setLiveEdit === "function") {
+        setLiveEdit(true);
+    }
+}
+
+function endLiveEdit() {
+
+    if (typeof flushLyricsSave === "function") {
+        flushLyricsSave();
+    }
+
+    if (typeof flushTitleSave === "function") {
+        flushTitleSave();
+    }
+
+    if (typeof setLiveEdit === "function") {
+        setLiveEdit(false);
+    }
+
+    if (typeof consumeRenderDeferred === "function") {
+        const deferred =
+            consumeRenderDeferred();
+
+        if (
+            deferred &&
+            typeof renderRedRoomSafe === "function"
+        ) {
+
+            renderRedRoomSafe();
+        }
+    }
+}
+
+function isRedRoomEditorFocused() {
+
+    const active =
+        document.activeElement;
+
+    if (!active) {
+        return false;
+    }
+
+    return Boolean(
+        active.closest &&
+        active.closest("#song-sections, #song-title")
+    );
+}
+
+function renderRedRoomSafe() {
+
+    /* Never tear down the focused editor. Merge already updated
+       state; the visual reconciliation waits for blur. */
+    if (isRedRoomEditorFocused()) {
+
+        if (typeof markRenderDeferred === "function") {
+            markRenderDeferred();
+        }
+
+        return;
+    }
+
+    renderRedRoom();
+}
+
+
 /* =========================================================
    TOUCH SONG
 ========================================================= */
@@ -71,10 +142,18 @@ function renderRedRoom() {
 
     if (titleInput) {
 
-        /* Empty title stays empty: the placeholder handles
-           the visual "UNTITLED" (see index.html). */
-        titleInput.value =
-            song.title || "";
+        /* Never overwrite the title while it has focus: state
+           already holds the in-progress keystrokes. Empty title
+           stays empty; the placeholder shows "UNTITLED". */
+        if (document.activeElement !== titleInput) {
+
+            const next =
+                song.title || "";
+
+            if (titleInput.value !== next) {
+                titleInput.value = next;
+            }
+        }
     }
 
 
@@ -107,6 +186,24 @@ function renderRedRoom() {
 ========================================================= */
 
 function renderSections() {
+
+    if (isRedRoomEditorFocused()) {
+
+        const focusedSong =
+            getCurrentSong();
+
+        if (focusedSong && Array.isArray(focusedSong.sections)) {
+            focusedSong.sections.forEach(section => {
+                refreshSectionCard(section.id);
+            });
+        }
+
+        if (typeof markRenderDeferred === "function") {
+            markRenderDeferred();
+        }
+
+        return;
+    }
 
     const song =
         getCurrentSong();
@@ -231,6 +328,88 @@ function renderSections() {
 
 
 /* =========================================================
+   SURGICAL SECTION REFRESH
+   Rebuilds one section card's chrome (type input value, active
+   highlight) WITHOUT replacing the focused editor node or
+   resetting its in-progress value. Used after local edits and
+   remote merges while the writer may be typing.
+   ========================================================= */
+
+function refreshSectionCard(sectionId) {
+
+    const song =
+        getCurrentSong();
+
+    const container =
+        document.getElementById(
+            "song-sections"
+        );
+
+    if (!song || !container) {
+        return;
+    }
+
+    const section =
+        song.sections.find(
+            item =>
+                item.id ===
+                sectionId
+        );
+
+    const card =
+        container.querySelector(
+            `[data-section-id="${sectionId}"]`
+        );
+
+    if (!section || !card) {
+        return;
+    }
+
+    card.classList.toggle(
+        "active-section",
+        section.id ===
+        currentSectionId
+    );
+
+    const typeInput =
+        card.querySelector(".section-type");
+
+    /* Never overwrite the type input while it has focus: the user
+       may be mid-word and state already holds their keystrokes. */
+    if (
+        typeInput &&
+        document.activeElement !== typeInput
+    ) {
+
+        const next =
+            section.type || "";
+
+        if (typeInput.value !== next) {
+            typeInput.value = next;
+        }
+    }
+
+    const editor =
+        card.querySelector(".lyrics-editor");
+
+    /* Never overwrite the focused textarea. State already holds
+       the local keystrokes; remote text applies on blur render. */
+    if (
+        editor &&
+        document.activeElement !== editor
+    ) {
+
+        const next =
+            section.lyrics || "";
+
+        if (editor.value !== next) {
+            editor.value = next;
+        }
+    }
+}
+
+
+/* =========================================================
    SET CURRENT SECTION
 ========================================================= */
 
@@ -331,8 +510,12 @@ function updateSectionLyrics(
         value;
 
 
+    beginLiveEdit();
+
     currentSectionId =
         sectionId;
+
+    refreshSectionCard(sectionId);
 
 
     touchSong(song);
@@ -409,6 +592,8 @@ function renameSection(
 
     touchSong(song);
 
+    beginLiveEdit();
+
     saveState();
 }
 
@@ -456,7 +641,7 @@ function addSection(
 
     saveState();
 
-    renderRedRoom();
+    renderRedRoomSafe();
 
 
     setTimeout(() => {
@@ -479,6 +664,16 @@ function addSection(
 ========================================================= */
 
 function deleteSection(id) {
+
+    if (isRedRoomEditorFocused()) {
+
+        if (typeof markRenderDeferred === "function") {
+            markRenderDeferred();
+        }
+
+        return;
+    }
+
 
     const song =
         getCurrentSong();
@@ -533,6 +728,16 @@ function deleteSection(id) {
 ========================================================= */
 
 function moveSection(id, delta) {
+
+    if (isRedRoomEditorFocused()) {
+
+        if (typeof markRenderDeferred === "function") {
+            markRenderDeferred();
+        }
+
+        return;
+    }
+
 
     const song =
         getCurrentSong();
@@ -645,6 +850,22 @@ function saveSong() {
    SONG TITLE CHANGE
 ========================================================= */
 
+/* renderAll() and sync reconciliation call renderRedRoom() from
+   contexts that cannot know whether the user is typing. This
+   funnel is installed at the bottom of the file, after every
+   helper it calls, so the focused editor is never replaced
+   mid-keystroke. */
+/* Installed below: renderRedRoom() itself is wrapped so every
+   existing caller (renderAll, sync adopt, section ops) funnels
+   through renderRedRoomSafe(). Explicit local actions that need
+   an immediate rebuild while nothing is focused still work
+   because the safe version renders normally when unfocused. */
+function renderRedRoomRequested() {
+
+    renderRedRoomSafe();
+}
+
+
 function updateSongTitle() {
 
     const song =
@@ -661,13 +882,39 @@ function updateSongTitle() {
     }
 
 
+    /* Local-first: update memory on every keystroke, but do not
+       synchronously persist/cloud-push per character. */
     song.title =
-        input.value.trim();
+        input.value;
 
 
     touchSong(song);
 
-    saveState();
+    beginLiveEdit();
+
+    clearTimeout(titleSaveTimer);
+
+    titleSaveTimer =
+        setTimeout(
+            () => {
+                titleSaveTimer = null;
+                saveState();
+            },
+            400
+        );
+}
+
+
+function flushTitleSave() {
+
+    if (titleSaveTimer) {
+
+        clearTimeout(titleSaveTimer);
+
+        titleSaveTimer = null;
+
+        saveState();
+    }
 }
 
 
@@ -890,3 +1137,14 @@ function leaveSong() {
 
     showView("crate");
 }
+
+/* =========================================================
+   FOCUS-SAFE RENDER FUNNEL
+   Installed last so every earlier renderRedRoom() caller routes
+   through renderRedRoomSafe(). Function declarations hoist, so
+   calling renderRedRoomSafe() earlier in this file is fine.
+   ========================================================= */
+
+renderRedRoom = function () {
+    renderRedRoomSafe();
+};

@@ -356,32 +356,40 @@ button {
 
 [data-view="crate"] .app-background {
     background:
+        /* Deep neutral charcoal base with a soft, wide blue
+           spotlight falling on the main content area - not a hard
+           circle, and never a fully blue page. */
         radial-gradient(
-            circle at 80% 15%,
-            rgba(49,95,145,.22),
-            transparent 35%
+            ellipse at 50% 10%,
+            rgba(49,95,145,.20),
+            rgba(49,95,145,.06) 46%,
+            transparent 74%
         ),
         radial-gradient(
-            circle at 10% 90%,
-            rgba(25,60,100,.12),
-            transparent 40%
+            ellipse at 50% 100%,
+            rgba(25,60,100,.10),
+            transparent 66%
         ),
-        #071019;
+        #0a0c10;
 }
 
 [data-view="folder"] .app-background {
     background:
+        /* Deep neutral charcoal base with a soft, wide blue
+           spotlight falling on the main content area - not a hard
+           circle, and never a fully blue page. */
         radial-gradient(
-            circle at 75% 20%,
-            rgba(56,112,78,.30),
-            transparent 35%
+            ellipse at 50% 10%,
+            rgba(49,95,145,.20),
+            rgba(49,95,145,.06) 46%,
+            transparent 74%
         ),
         radial-gradient(
-            circle at 15% 85%,
-            rgba(30,80,50,.18),
-            transparent 40%
+            ellipse at 50% 100%,
+            rgba(25,60,100,.10),
+            transparent 66%
         ),
-        #07120c;
+        #0a0c10;
 }
 
 [data-liners="verses"] .app-background {
@@ -813,47 +821,51 @@ button {
 
 .folder {
     position: relative;
-    color: #0c1826;
-    background: linear-gradient(180deg, #e8f2fd 0%, #cfE3f8 100%);
-    border-color: rgba(147,188,230,.75);
+
+    /* Refined, slightly desaturated light blue that reads clearly
+       against the dark CRATE environment. */
+    color: #0f1c2b;
+    background: linear-gradient(180deg, #dfeaf7 0%, #c3d8ee 100%);
+    border: 1px solid rgba(150,186,224,.55);
 
     min-height: 125px;
 
     padding: 18px;
 
-    border: 1px solid rgba(100,140,180,.15);
-
-    background: rgba(30,60,90,.13);
-
     cursor: pointer;
 
-    transition: .3s ease;
+    transition:
+        background .25s ease,
+        border-color .25s ease,
+        transform .25s ease,
+        box-shadow .25s ease;
 }
 
 .folder:hover,
 .folder.drag-over {
-    background: linear-gradient(180deg, #f2f8ff 0%, #d8eafb 100%);
-    border-color: rgba(147,188,230,.9);
-
-    background: rgba(40,80,120,.22);
+    background: linear-gradient(180deg, #edf5ff 0%, #d2e4f7 100%);
+    border-color: rgba(163,199,235,.85);
 
     transform: translateY(-2px);
 }
 
 .folder.is-open {
-    border-color: #4f83c2;
-    background: linear-gradient(180deg, #ffffff 0%, #d3e7fb 100%);
+    /* Inside the folder: dark blue / blue-black, deeper than the
+       CRATE environment itself. */
+    color: #e8f0fa;
+    background: linear-gradient(180deg, #111d30 0%, #101b2b 100%);
+    border-color: rgba(120,170,225,.55);
     box-shadow:
-        0 0 0 1px rgba(147,188,230,.18),
-        0 0 28px rgba(64,125,190,.14);
+        inset 0 0 0 1px rgba(120,170,225,.18),
+        0 10px 30px rgba(0,0,0,.35);
 }
 
 .folder.is-open .folder-name {
-    color: #0c1826;
+    color: #e8f0fa;
 }
 
 .folder.is-open .folder-icon {
-    color: #2f5b87;
+    color: #7fb0e4;
 }
 
 .folder.drag-over {
@@ -869,35 +881,39 @@ button {
     margin-bottom: 28px;
 }
 
-/* Optional per-folder accent colors.
-   The app currently applies this only to the "Test" folder
-   using data-folder-color="teal". */
-.folder[data-folder-color="teal"] .folder-icon {
-    color: #4fd1c5;
-}
+/* Non-colour cue for the open folder: the active state must stay
+   understandable without relying on colour alone. */
+.folder.is-open .folder-icon::after {
+    content: "OPEN";
 
-.folder[data-folder-color="teal"] {
-    border-color: rgba(79,209,197,.35);
-    background: rgba(20,60,55,.18);
-}
+    display: block;
 
-.folder[data-folder-color="teal"]:hover,
-.folder[data-folder-color="teal"].drag-over {
-    border-color: rgba(79,209,197,.7);
-    background: rgba(20,70,62,.32);
-}
-
-.folder-name {
-    font-size: 13px;
-    color: #0c1826;
-}
-
-.folder-count {
-    color: #47637f;
+    margin-top: 4px;
 
     font-family: "DM Mono", monospace;
 
     font-size: 9px;
+
+    letter-spacing: .16em;
+
+    color: #7fb0e4;
+}
+
+.folder.is-open .folder-count {
+    color: #93b4d4;
+}
+
+.folder-name {
+    font-size: 13px;
+    color: #0f1c2b;
+}
+
+.folder-count {
+    color: #33506e;
+
+    font-family: "DM Mono", monospace;
+
+    font-size: 10px;
 
     margin-top: 5px;
 }
@@ -905,16 +921,20 @@ button {
 .folder-actions {
     position: absolute;
 
-    top: 8px;
-    right: 8px;
+    top: 6px;
+    right: 6px;
 
     display: flex;
     gap: 2px;
 
-    opacity: 0;
+    /* Never hover-gated: touch and keyboard users must be able to
+       reach rename/delete without a pointer hover. */
+    opacity: .72;
 }
 
-.folder:hover .folder-actions {
+.folder:hover .folder-actions,
+.folder:focus-within .folder-actions,
+.folder.is-open .folder-actions {
     opacity: 1;
 }
 
@@ -923,13 +943,35 @@ button {
 
     background: transparent;
 
-    color: #777;
+    color: #4a6484;
 
     cursor: pointer;
+
+    /* Comfortable touch target (>= 40px) without growing the card. */
+    min-width: 40px;
+    min-height: 40px;
+
+    font-size: 15px;
+
+    line-height: 1;
+
+    border-radius: 5px;
 }
 
 .folder-actions button:hover {
-    color: white;
+    color: #0f1c2b;
+
+    background: rgba(15,28,43,.10);
+}
+
+.folder-actions button:disabled {
+    color: #9db4ca;
+
+    cursor: not-allowed;
+}
+
+.folder.is-open .folder-actions button {
+    color: #9cc2e8;
 }
 
 .song-list {
@@ -968,11 +1010,11 @@ button {
 .song-number {
     width: 45px;
 
-    color: #4d5155;
+    color: #6b7075;
 
     font-family: "DM Mono", monospace;
 
-    font-size: 9px;
+    font-size: 10px;
 }
 
 .song-main {
@@ -980,7 +1022,7 @@ button {
 }
 
 .song-title {
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .song-sub {
@@ -988,9 +1030,9 @@ button {
 
     font-family: "DM Mono", monospace;
 
-    font-size: 8px;
+    font-size: 10px;
 
-    color: #555b60;
+    color: #6f757b;
 }
 
 .song-folder {
@@ -998,9 +1040,9 @@ button {
 
     font-family: "DM Mono", monospace;
 
-    font-size: 9px;
+    font-size: 10px;
 
-    color: #555f68;
+    color: #6d7780;
 }
 
 .song-status {
@@ -1008,9 +1050,9 @@ button {
 
     font-family: "DM Mono", monospace;
 
-    font-size: 8px;
+    font-size: 10px;
 
-    color: #6a7075;
+    color: #8a9095;
 
     min-width: 75px;
 
@@ -1024,10 +1066,12 @@ button {
 
     gap: 4px;
 
-    opacity: 0;
+    /* Never hover-gated - see .folder-actions. */
+    opacity: .72;
 }
 
-.song-row:hover .song-actions {
+.song-row:hover .song-actions,
+.song-row:focus-within .song-actions {
     opacity: 1;
 }
 
@@ -1036,15 +1080,39 @@ button {
 
     background: transparent;
 
-    color: #666;
+    color: #8b9096;
 
     cursor: pointer;
 
-    padding: 4px;
+    min-width: 40px;
+    min-height: 40px;
+
+    font-size: 14px;
+
+    line-height: 1;
+
+    border-radius: 5px;
 }
 
 .song-actions button:hover {
     color: white;
+
+    background: rgba(255,255,255,.06);
+}
+
+
+/* Keyboard focus must always be visible on CRATE controls. */
+
+.folder:focus-visible,
+.song-row:focus-visible {
+    outline: 2px solid rgba(140,185,235,.9);
+    outline-offset: 2px;
+}
+
+.folder-actions button:focus-visible,
+.song-actions button:focus-visible {
+    outline: 2px solid rgba(140,185,235,.9);
+    outline-offset: 1px;
 }
 
 .empty-state {

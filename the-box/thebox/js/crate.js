@@ -39,7 +39,11 @@ function renderCrate() {
                             folder.id
                     ).length;
 
-                const isTest =
+                /* "Test" stays undeletable; that guard is
+                   behaviour, not styling, so it no longer drives a
+                   colour special-case. Every folder shares one blue
+                   system now. */
+                const isProtected =
                     folder.name.trim() === "Test";
 
                 const isOpen =
@@ -54,9 +58,22 @@ function renderCrate() {
                                 : ""
                         }"
                         data-folder-id="${folder.id}"
-                        data-folder-color="${
-                            isTest ? "teal" : ""
+                        tabindex="0"
+                        role="button"
+                        aria-label="${escapeAttribute(
+                            folder.name
+                        )} folder, ${count} song${
+                            count === 1 ? "" : "s"
+                        }${
+                            isOpen
+                                ? ", currently open"
+                                : ""
                         }"
+                        ${
+                            isOpen
+                                ? 'aria-current="true"'
+                                : ""
+                        }
                     >
 
                         <div class="folder-actions">
@@ -64,6 +81,9 @@ function renderCrate() {
                             <button
                                 data-action="rename-folder"
                                 title="Rename"
+                                aria-label="Rename ${escapeAttribute(
+                                    folder.name
+                                )}"
                                 type="button"
                             >
                                 ✎
@@ -72,8 +92,11 @@ function renderCrate() {
                             <button
                                 data-action="delete-folder"
                                 title="Delete"
+                                aria-label="Delete ${escapeAttribute(
+                                    folder.name
+                                )}"
                                 type="button"
-                                ${isTest ? "disabled" : ""}
+                                ${isProtected ? "disabled" : ""}
                             >
                                 ×
                             </button>
@@ -159,6 +182,12 @@ function renderSongRow(
             class="song-row"
             data-song-id="${song.id}"
             draggable="true"
+            tabindex="0"
+            role="button"
+            aria-label="Open song ${escapeAttribute(
+                song.title ||
+                "UNTITLED"
+            )}"
         >
 
             <div class="song-number">
@@ -210,6 +239,10 @@ function renderSongRow(
                     data-action="move-song"
                     type="button"
                     title="Move to folder"
+                    aria-label="Move ${escapeAttribute(
+                        song.title ||
+                        "UNTITLED"
+                    )} to a folder"
                 >
                     ⇢
                 </button>
@@ -218,6 +251,10 @@ function renderSongRow(
                     data-action="duplicate-song"
                     type="button"
                     title="Duplicate"
+                    aria-label="Duplicate ${escapeAttribute(
+                        song.title ||
+                        "UNTITLED"
+                    )}"
                 >
                     ⧉
                 </button>
@@ -226,6 +263,10 @@ function renderSongRow(
                     data-action="delete-song"
                     type="button"
                     title="Delete"
+                    aria-label="Delete ${escapeAttribute(
+                        song.title ||
+                        "UNTITLED"
+                    )}"
                 >
                     ×
                 </button>
@@ -480,6 +521,13 @@ function openSong(id) {
     currentSectionId =
         song.sections[0]?.id ||
         null;
+
+    /* Opening a song is an explicit navigation action. Leaving the
+       folder detail view means the folder is no longer the current
+       context, so the CRATE grid must not keep it highlighted.
+       showView() also clears this for every non-folder view; setting
+       it here keeps the intent local to the action itself. */
+    currentFolderId = null;
 
     showView("redroom");
 }
@@ -934,20 +982,52 @@ function openFolder(id) {
             folder.name;
     }
 
-    /* Keep the folder grid highlight in sync without changing
-       navigation behavior. */
+    syncFolderOpenHighlight();
+
+    showView("folder");
+}
+
+
+/* ---------------------------------------------------------
+   OPEN-FOLDER HIGHLIGHT
+
+   Single source of truth for the .is-open class and its
+   aria-current counterpart. renderCrate() also derives the class
+   from currentFolderId while building the grid, so keeping one
+   helper means the DOM and state cannot drift apart.
+--------------------------------------------------------- */
+
+function syncFolderOpenHighlight() {
+
     document
         .querySelectorAll(".folder")
         .forEach(element => {
 
+            const isOpen =
+                element.dataset.folderId ===
+                currentFolderId;
+
+
             element.classList.toggle(
                 "is-open",
-                element.dataset.folderId ===
-                id
+                isOpen
             );
-        });
 
-    showView("folder");
+
+            if (isOpen) {
+
+                element.setAttribute(
+                    "aria-current",
+                    "true"
+                );
+
+            } else {
+
+                element.removeAttribute(
+                    "aria-current"
+                );
+            }
+        });
 }
 
 

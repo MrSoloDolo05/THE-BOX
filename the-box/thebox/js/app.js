@@ -10,6 +10,21 @@
 function showView(view) {
 
     /* -----------------------------------------------------
+       FOLDER CONTEXT
+       currentFolderId drives the open-folder highlight on the
+       CRATE grid. It must represent the CURRENT navigation
+       context, so it is cleared whenever we are not actually
+       inside the folder detail view. Without this, opening a
+       song from inside a folder left that folder highlighted
+       after returning to the CRATE.
+    ----------------------------------------------------- */
+
+    if (view !== "folder") {
+        currentFolderId = null;
+    }
+
+
+    /* -----------------------------------------------------
        GUARD: RED ROOM NEEDS A SONG
        (the sidebar link can be clicked with nothing open;
        jump into the most recently edited song instead of
@@ -1605,6 +1620,27 @@ function setupCrate() {
             }
         );
 
+        /* Keyboard parity: the card itself is focusable, so
+           Enter/Space must open it exactly like a click. */
+        delegateKeyActivate(
+            folderGrid,
+            ".folder",
+            (event, el) => {
+
+                if (
+                    event.target.closest(
+                        ".folder-actions"
+                    )
+                ) {
+                    return;
+                }
+
+                openFolder(
+                    el.dataset.folderId
+                );
+            }
+        );
+
         delegateClick(
             folderGrid,
             '[data-action="rename-folder"]',
@@ -1641,6 +1677,26 @@ function setupCrate() {
         }
 
         delegateClick(
+            songList,
+            ".song-row",
+            (event, el) => {
+
+                if (
+                    event.target.closest(
+                        ".song-actions"
+                    )
+                ) {
+                    return;
+                }
+
+                openSong(
+                    el.dataset.songId
+                );
+            }
+        );
+
+        /* Keyboard parity for song rows - see the folder grid. */
+        delegateKeyActivate(
             songList,
             ".song-row",
             (event, el) => {

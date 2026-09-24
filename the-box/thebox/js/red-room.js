@@ -74,11 +74,30 @@ function isRedRoomEditorFocused() {
     );
 }
 
-function renderRedRoomSafe() {
+/* The id of the song the Red Room DOM currently reflects. Opening a
+   different song must always rebuild, even when a stale focus is
+   still sitting in an editor. */
+let renderedSongId = null;
 
-    /* Never tear down the focused editor. Merge already updated
-       state; the visual reconciliation waits for blur. */
-    if (isRedRoomEditorFocused()) {
+function renderRedRoomSafe(force) {
+
+    const song =
+        getCurrentSong();
+
+    /* Defer only while the writer is still in the SAME song; the
+       merge already updated state and the visual reconciliation
+       waits for blur. A different song (or an explicit force) always
+       rebuilds, so an explicit song selection can never be swallowed
+       by the focus guard. */
+    const sameSong =
+        Boolean(song) &&
+        song.id === renderedSongId;
+
+    if (
+        !force &&
+        sameSong &&
+        isRedRoomEditorFocused()
+    ) {
 
         if (typeof markRenderDeferred === "function") {
             markRenderDeferred();
@@ -87,7 +106,7 @@ function renderRedRoomSafe() {
         return;
     }
 
-    renderRedRoom();
+    renderRedRoomContent();
 }
 
 
@@ -114,7 +133,7 @@ function touchSong(song) {
    RENDER RED ROOM
 ========================================================= */
 
-function renderRedRoom() {
+function renderRedRoomContent() {
 
     const song =
         getCurrentSong();
@@ -175,6 +194,10 @@ function renderRedRoom() {
                 "DRAFT"
             ).toUpperCase();
     }
+
+
+    renderedSongId =
+        song.id;
 
 
     renderSections();
@@ -1143,6 +1166,12 @@ function leaveSong() {
    Installed last so every earlier renderRedRoom() caller routes
    through renderRedRoomSafe(). Function declarations hoist, so
    calling renderRedRoomSafe() earlier in this file is fine.
+
+   NOTE: renderRedRoomSafe() must call renderRedRoomContent(), NOT
+   renderRedRoom(). Calling renderRedRoom() here re-enters this
+   funnel and recurses until the stack overflows, which silently
+   blocked every Red Room render - making every song appear to
+   open the previously rendered one.
    ========================================================= */
 
 renderRedRoom = function () {

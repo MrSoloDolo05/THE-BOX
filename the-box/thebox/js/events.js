@@ -73,6 +73,56 @@ function delegateChange(container, selector, handler) {
 
 
 /* ---------------------------------------------------------
+   Keyboard activation delegation
+
+   CRATE folder cards and song rows are divs carrying
+   tabindex="0" + role="button". Enter and Space must activate
+   them exactly like a click. Space is prevented from scrolling
+   the page while a card has focus.
+
+   handler receives (event, element)
+--------------------------------------------------------- */
+
+function delegateKeyActivate(container, selector, handler) {
+
+    if (!container) {
+        return;
+    }
+
+    container.addEventListener(
+        "keydown",
+        function (e) {
+
+            if (e.key !== "Enter" && e.key !== " ") {
+                return;
+            }
+
+            const el =
+                e.target.closest(selector);
+
+
+            if (!el || !container.contains(el)) {
+                return;
+            }
+
+
+            /* Activate only when the control itself has focus, not
+               when a nested action button does. */
+            if (e.target !== el) {
+                return;
+            }
+
+
+            /* Space would otherwise scroll the page. */
+            e.preventDefault();
+
+            handler(e, el);
+        }
+    );
+}
+
+
+/* ---------------------------------------------------------
    Modal confirm handler manager
 
    The #modal-confirm button is shared across many modals.

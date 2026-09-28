@@ -639,13 +639,61 @@
                                 NEW SONG
                             </button>
 
-                            <button
-                                id="add-section-button"
-                                class="red-button"
-                                type="button"
-                            >
-                                + SECTION
-                            </button>
+                            <div class="section-add-wrap">
+
+                                <button
+                                    id="add-section-button"
+                                    class="red-button"
+                                    type="button"
+                                    aria-haspopup="menu"
+                                    aria-expanded="false"
+                                    aria-controls="section-type-menu"
+                                >
+                                    + SECTION
+                                </button>
+
+                                <div
+                                    id="section-type-menu"
+                                    class="section-type-menu"
+                                    role="menu"
+                                    aria-label="Add a section"
+                                >
+
+                                    <button data-section-type="VERSE" role="menuitem">
+                                        VERSE
+                                    </button>
+
+                                    <button data-section-type="CHORUS" role="menuitem">
+                                        CHORUS
+                                    </button>
+
+                                    <button data-section-type="PRE-CHORUS" role="menuitem">
+                                        PRE-CHORUS
+                                    </button>
+
+                                    <button data-section-type="BRIDGE" role="menuitem">
+                                        BRIDGE
+                                    </button>
+
+                                    <button data-section-type="INTRO" role="menuitem">
+                                        INTRO
+                                    </button>
+
+                                    <button data-section-type="OUTRO" role="menuitem">
+                                        OUTRO
+                                    </button>
+
+                                    <button
+                                        class="custom"
+                                        data-section-type="custom"
+                                        role="menuitem"
+                                    >
+                                        CUSTOM
+                                    </button>
+
+                                </div>
+
+                            </div>
 
                             <div class="template-button-wrap">
 
@@ -653,45 +701,64 @@
                                     id="template-button"
                                     class="red-button"
                                     type="button"
+                                    aria-haspopup="menu"
+                                    aria-expanded="false"
+                                    aria-controls="template-menu"
+                                    title="Start with a structure"
                                 >
                                     TEMPLATES
                                 </button>
 
 
-                                <!-- SECTION TEMPLATE MENU -->
+                                <!-- SONG STRUCTURE TEMPLATES -->
 
                                 <div
                                     id="template-menu"
                                     class="template-menu"
+                                    role="menu"
+                                    aria-label="Song structure templates"
                                 >
 
-                                    <button data-template="verse">
+                                    <button data-template="basic" role="menuitem">
+                                        BASIC
+                                    </button>
+
+                                    <button data-template="build" role="menuitem">
+                                        BUILD
+                                    </button>
+
+                                    <button data-template="journey" role="menuitem">
+                                        BRIDGE STORY
+                                    </button>
+
+                                    <button data-template="verse" role="menuitem">
                                         VERSE
                                     </button>
 
-                                    <button data-template="chorus">
+                                    <button data-template="chorus" role="menuitem">
                                         CHORUS
                                     </button>
 
-                                    <button data-template="prechorus">
+                                    <button data-template="prechorus" role="menuitem">
                                         PRE-CHORUS
                                     </button>
 
-                                    <button data-template="bridge">
+                                    <button data-template="bridge" role="menuitem">
                                         BRIDGE
                                     </button>
 
-                                    <button data-template="intro">
+                                    <button data-template="intro" role="menuitem">
                                         INTRO
                                     </button>
 
-                                    <button data-template="outro">
+                                    <button data-template="outro" role="menuitem">
                                         OUTRO
                                     </button>
 
                                     <button
                                         class="custom"
                                         data-template="custom"
+                                        role="menuitem"
                                     >
                                         CUSTOM
                                     </button>
@@ -704,8 +771,29 @@
                                 id="save-song-button"
                                 class="red-button"
                                 type="button"
+                                aria-label="Leave Red Room and return to Crate"
                             >
-                                SAVE &amp; EXIT
+                                ← CRATE
+                            </button>
+
+                        </div>
+
+                        <div
+                            id="section-undo-bar"
+                            class="section-undo-bar"
+                            hidden
+                        >
+
+                            <span>
+                                Section deleted
+                            </span>
+
+                            <button
+                                id="section-undo-button"
+                                class="section-undo-btn"
+                                type="button"
+                            >
+                                UNDO
                             </button>
 
                         </div>

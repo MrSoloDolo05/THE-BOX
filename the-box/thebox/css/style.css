@@ -428,16 +428,17 @@ button {
 [data-view="redroom"] .app-background {
     background:
         radial-gradient(
-            circle at 50% 20%,
-            rgba(158,36,45,.25),
-            transparent 40%
+            ellipse 90% 60% at 50% 28%,
+            rgba(158,36,45,.20) 0%,
+            rgba(158,36,45,.09) 40%,
+            transparent 72%
         ),
-        radial-gradient(
-            circle at 90% 80%,
-            rgba(100,20,30,.14),
-            transparent 40%
-        ),
-        #130709;
+        linear-gradient(
+            180deg,
+            #100a0b 0%,
+            #0d0d10 48%,
+            #070708 100%
+        );
 }
 
 [data-view="search"] .app-background {
@@ -1935,9 +1936,11 @@ a:focus-visible,
 ========================================================= */
 
 .redroom-header {
-    max-width: 900px;
-
-    margin-bottom: 35px;
+    max-width: 44rem;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 28px;
+    width: 100%;
 }
 
 #redroom-back-button {
@@ -1968,7 +1971,8 @@ a:focus-visible,
 }
 
 .song-title-input:focus {
-    border-color: rgba(200,70,80,.5);
+    border-color: rgba(220,120,130,.55);
+    box-shadow: 0 1px 0 rgba(220,120,130,.25);
 }
 
 .song-meta {
@@ -1992,24 +1996,28 @@ a:focus-visible,
 }
 
 .sections {
-    max-width: 900px;
-
+    max-width: 44rem;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
     display: flex;
-
     flex-direction: column;
-
-    gap: 10px;
+    gap: 12px;
 }
 
 .song-section {
     border:
-        1px solid rgba(170,60,70,.16);
-
+        1px solid rgba(170,60,70,.22);
     background:
-        rgba(255,255,255,.025);
-
-    transition: .25s ease;
-    cursor: pointer;
+        rgba(22,13,14,.72);
+    border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.35);
+    overflow: hidden;
+    transition:
+        background 300ms ease,
+        border-color 240ms ease,
+        box-shadow 240ms ease;
+    cursor: default;
 }
 
 .song-section:focus-visible {
@@ -2019,12 +2027,13 @@ a:focus-visible,
 
 .song-section:hover {
     border-color:
-        rgba(170,60,70,.28);
+        rgba(190,80,90,.34);
 }
 
 .song-section.active-section {
     border-color:
-        rgba(200,70,80,.38);
+        rgba(210,100,110,.45);
+    box-shadow: 0 6px 24px rgba(0,0,0,.45);
 }
 
 .song-section.dragging {
@@ -2139,14 +2148,11 @@ a:focus-visible,
 }
 
 .section-bar {
-    min-height: 44px;
-
+    min-height: 52px;
     display: flex;
-
     align-items: center;
-
-    padding: 0 14px;
-
+    gap: 10px;
+    padding: 6px 10px 6px 16px;
     border-bottom:
         1px solid rgba(255,255,255,.06);
 }
@@ -2163,30 +2169,124 @@ a:focus-visible,
 
 .section-name {
     background: transparent;
-
     border: 0;
-
-    color: #a89a9d;
-
+    border-radius: 6px;
+    color: #d8c9cb;
     font-family: "DM Mono", monospace;
-
-    font-size: 9px;
-
-    letter-spacing: .14em;
-
+    font-size: 11px;
+    letter-spacing: .16em;
     text-transform: uppercase;
-
     outline: none;
+    flex: 1;
+    min-width: 0;
+    padding: 10px 6px;
+}
 
-    width: 190px;
+.section-name:focus {
+    color: white;
+    background: rgba(180,60,70,.10);
+}
+
+.section-name:focus-visible {
+    outline: 2px solid rgba(220,120,130,.7);
+    outline-offset: 1px;
 }
 
 .section-tools {
     margin-left: auto;
-
     display: flex;
-
+    align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+}
+
+.section-kebab {
+    position: relative;
+}
+
+.section-kebab-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #9a8587;
+    font-size: 15px;
+    letter-spacing: .12em;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.section-kebab-btn:hover {
+    color: white;
+    background: rgba(180,60,70,.14);
+}
+
+.section-kebab-btn:focus-visible {
+    outline: 2px solid rgba(220,120,130,.75);
+    outline-offset: 1px;
+}
+
+.section-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    min-width: 190px;
+    display: none;
+    padding: 6px;
+    background: #160c0d;
+    border: 1px solid rgba(190,80,90,.32);
+    border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(0,0,0,.55);
+}
+
+.section-kebab.open .section-menu {
+    display: block;
+}
+
+.section-menu button {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #d8c9cb;
+    text-align: left;
+    font-family: "DM Mono", monospace;
+    font-size: 11px;
+    letter-spacing: .08em;
+    padding: 12px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.section-menu button:hover {
+    background: rgba(190,80,90,.16);
+    color: white;
+}
+
+.section-menu button:focus-visible {
+    outline: 2px solid rgba(220,120,130,.75);
+    outline-offset: -1px;
+}
+
+.section-menu button:disabled {
+    opacity: .38;
+    cursor: not-allowed;
+}
+
+.section-menu button:disabled:hover {
+    background: transparent;
+    color: #d8c9cb;
+}
+
+.section-menu button.danger {
+    color: #e89aa0;
 }
 
 .section-tools button {
@@ -2204,43 +2304,41 @@ a:focus-visible,
 }
 
 .section-editor {
-    min-height: 160px;
-
+    min-height: 170px;
     width: 100%;
-
     background: transparent;
-
     border: 0;
-
     outline: none;
-
     resize: vertical;
-
-    color: #ddd9d9;
-
-    padding: 22px;
-
+    color: #ece3e3;
+    padding: 20px 18px 22px;
     line-height: 1.8;
+    font-size: 15px;
+}
 
-    font-size: 14px;
+.section-editor::placeholder {
+    color: #6b5d5f;
 }
 
 .section-editor:focus {
     background:
-        rgba(150,30,40,.018);
+        rgba(150,30,40,.03);
+}
+
+.section-editor:focus-visible {
+    outline: 2px solid rgba(220,120,130,.5);
+    outline-offset: -2px;
 }
 
 .red-actions {
-    max-width: 900px;
-
+    max-width: 44rem;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
     display: flex;
-
     gap: 8px;
-
     margin-top: 15px;
-
-    margin-bottom: 80px;
-
+    margin-bottom: 24px;
     flex-wrap: wrap;
 }
 
@@ -2274,8 +2372,64 @@ a:focus-visible,
 
 
 /* =========================================================
-   SECTION TEMPLATE MENU
+   SECTION TYPE + SONG STRUCTURE MENUS
 ========================================================= */
+
+.section-add-wrap {
+    position: relative;
+}
+
+.section-type-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    width: 230px;
+    background:
+        rgba(15,8,9,.98);
+    border:
+        1px solid rgba(180,60,70,.25);
+    box-shadow:
+        0 25px 80px rgba(0,0,0,.5);
+    padding: 8px;
+    display: none;
+}
+
+.section-type-menu.open {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+}
+
+.section-type-menu button {
+    border: 0;
+    background: transparent;
+    color: #a89a9d;
+    padding: 12px 8px;
+    text-align: left;
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .08em;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.section-type-menu button:hover {
+    color: white;
+    background:
+        rgba(180,50,60,.12);
+}
+
+.section-type-menu button:focus-visible {
+    outline: 2px solid rgba(220,120,130,.75);
+    outline-offset: -1px;
+}
+
+.section-type-menu button.custom {
+    grid-column: 1 / -1;
+    border-top:
+        1px solid rgba(255,255,255,.06);
+}
 
 .template-button-wrap {
     position: relative;
@@ -2319,17 +2473,21 @@ a:focus-visible,
 
     background: transparent;
 
-    color: #817477;
+    color: #a89a9d;
 
-    padding: 10px 8px;
+    padding: 12px 8px;
 
     text-align: left;
 
     font-family: "DM Mono", monospace;
 
-    font-size: 8px;
+    font-size: 10px;
+
+    letter-spacing: .08em;
 
     cursor: pointer;
+
+    border-radius: 6px;
 }
 
 .template-menu button:hover {
@@ -2339,11 +2497,79 @@ a:focus-visible,
         rgba(180,50,60,.12);
 }
 
+.template-menu button:focus-visible {
+    outline: 2px solid rgba(220,120,130,.75);
+    outline-offset: -1px;
+}
+
+.template-menu button:disabled {
+    opacity: .42;
+    cursor: not-allowed;
+}
+
+.template-menu button:disabled:hover {
+    background: transparent;
+    color: #a89a9d;
+}
+
 .template-menu button.custom {
     grid-column: 1 / -1;
 
     border-top:
         1px solid rgba(255,255,255,.06);
+}
+
+.template-note {
+    grid-column: 1 / -1;
+    margin: 6px 2px 2px;
+    color: #9a8587;
+    font-family: "DM Mono", monospace;
+    font-size: 9px;
+    line-height: 1.6;
+    letter-spacing: .04em;
+}
+
+.section-undo-bar {
+    max-width: 44rem;
+    margin: 0 auto 80px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(22,13,14,.92);
+    border: 1px solid rgba(190,80,90,.35);
+    border-radius: 10px;
+    color: #d8c9cb;
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .1em;
+}
+
+.section-undo-bar[hidden] {
+    display: none;
+}
+
+.section-undo-btn {
+    border: 1px solid rgba(220,120,130,.5);
+    background: rgba(180,60,70,.16);
+    color: white;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: "DM Mono", monospace;
+    font-size: 10px;
+    letter-spacing: .12em;
+    cursor: pointer;
+}
+
+.section-undo-btn:hover {
+    background: rgba(180,60,70,.26);
+}
+
+.section-undo-btn:focus-visible {
+    outline: 2px solid rgba(220,120,130,.8);
+    outline-offset: 2px;
 }
 
 

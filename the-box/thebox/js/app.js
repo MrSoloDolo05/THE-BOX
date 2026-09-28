@@ -2031,10 +2031,7 @@ function setupRedRoom() {
 
         addSectionButton.addEventListener(
             "click",
-            () =>
-                addSection(
-                    "VERSE"
-                )
+            toggleSectionTypeMenu
         );
     }
 
@@ -2042,6 +2039,11 @@ function setupRedRoom() {
     const templateButton =
         document.getElementById(
             "template-button"
+        );
+
+    const sectionTypeMenu =
+        document.getElementById(
+            "section-type-menu"
         );
 
 
@@ -2054,6 +2056,77 @@ function setupRedRoom() {
     }
 
 
+    const undoBar =
+        document.getElementById(
+            "section-undo-bar"
+        );
+
+    const undoButton =
+        document.getElementById(
+            "section-undo-button"
+        );
+
+    if (undoButton) {
+
+        undoButton.addEventListener(
+            "click",
+            undoDeleteSection
+        );
+    }
+
+
+    /* Tapping outside an open section menu closes it. */
+    document.addEventListener(
+        "click",
+        event => {
+
+            if (
+                !event.target.closest(
+                    ".section-kebab"
+                )
+            ) {
+                closeOpenSectionMenus();
+            }
+
+            if (
+                !event.target.closest(
+                    ".template-button-wrap"
+                ) &&
+                !event.target.closest(
+                    "#template-menu"
+                )
+            ) {
+                closeTemplateMenu();
+            }
+
+            if (
+                !event.target.closest(
+                    ".section-add-wrap"
+                ) &&
+                !event.target.closest(
+                    "#section-type-menu"
+                )
+            ) {
+                closeSectionTypeMenu();
+            }
+        }
+    );
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Escape"
+            ) {
+                closeOpenSectionMenus();
+                closeTemplateMenu();
+                closeSectionTypeMenu();
+            }
+        }
+    );
+
+
     const saveButton =
         document.getElementById(
             "save-song-button"
@@ -2064,7 +2137,15 @@ function setupRedRoom() {
 
         saveButton.addEventListener(
             "click",
-            saveSong
+            exitToCrate
+        );
+
+        saveButton.textContent =
+            "← CRATE";
+
+        saveButton.setAttribute(
+            "aria-label",
+            "Leave Red Room and return to Crate"
         );
     }
 
@@ -2102,6 +2183,24 @@ function setupRedRoom() {
         });
 
 
+    document
+        .querySelectorAll(
+            "#section-type-menu [data-section-type]"
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    addSectionFromMenu(
+                        button.dataset.sectionType
+                    );
+                }
+            );
+        });
+
+
     /* -------------------------------------------------
        RED ROOM SECTION DELEGATION
     -------------------------------------------------- */
@@ -2121,7 +2220,7 @@ function setupRedRoom() {
 
                 const editor =
                     event.target.closest(
-                        ".lyrics-editor, .section-type"
+                        ".section-editor, .section-name"
                     );
 
                 if (
@@ -2147,7 +2246,7 @@ function setupRedRoom() {
                 if (
                     next &&
                     next.closest &&
-                    next.closest(".lyrics-editor, .section-type") &&
+                    next.closest(".section-editor, .section-name") &&
                     sectionsContainer.contains(next)
                 ) {
 
@@ -2162,21 +2261,30 @@ function setupRedRoom() {
 
         delegateChange(
             sectionsContainer,
-            ".section-type",
+            "[data-section-name]",
             (event, el) => {
 
-                renameSection(
+                commitSectionName(
                     el.dataset.sectionId,
                     el.value
                 );
             }
         );
 
-        /* Card click selects a section, but no inner editing or
-           management control may bubble into selection. */
+        /* Card body selects a section; editing and menu controls
+           never bubble into selection. */
         sectionsContainer.addEventListener(
             "click",
             event => {
+
+                if (
+                    event.target.closest(
+                        ".section-kebab, .section-menu"
+                    )
+                ) {
+
+                    return;
+                }
 
                 const card =
                     event.target.closest(
@@ -2195,7 +2303,7 @@ function setupRedRoom() {
 
                 if (
                     event.target.closest(
-                        "button, input, textarea, select, a, [data-no-select]"
+                        "button, input, textarea, select, a"
                     )
                 ) {
 
@@ -2246,10 +2354,55 @@ function setupRedRoom() {
 
         delegateClick(
             sectionsContainer,
-            '[data-action="open-picker"]',
+            '[data-action="section-menu"]',
             (event, el) => {
 
-                openLinerPickerForSection(
+                event.stopPropagation();
+
+                toggleSectionMenu(el);
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="focus-section-name"]',
+            (event, el) => {
+
+                closeOpenSectionMenus();
+
+                const card =
+                    el.closest(".song-section");
+
+                card
+                    ?.querySelector(
+                        "[data-section-name]"
+                    )
+                    ?.focus();
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="cycle-section-type"]',
+            (event, el) => {
+
+                closeOpenSectionMenus();
+
+                cycleSectionType(
+                    el.closest(".song-section")
+                        .dataset.sectionId
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="duplicate-section"]',
+            (event, el) => {
+
+                closeOpenSectionMenus();
+
+                duplicateSection(
                     el.closest(".song-section")
                         .dataset.sectionId
                 );
@@ -2260,6 +2413,8 @@ function setupRedRoom() {
             sectionsContainer,
             '[data-action="move-section-up"]',
             (event, el) => {
+
+                closeOpenSectionMenus();
 
                 moveSection(
                     el.closest(".song-section")
@@ -2274,6 +2429,8 @@ function setupRedRoom() {
             '[data-action="move-section-down"]',
             (event, el) => {
 
+                closeOpenSectionMenus();
+
                 moveSection(
                     el.closest(".song-section")
                         .dataset.sectionId,
@@ -2287,7 +2444,21 @@ function setupRedRoom() {
             '[data-action="delete-section"]',
             (event, el) => {
 
+                closeOpenSectionMenus();
+
                 deleteSection(
+                    el.closest(".song-section")
+                        .dataset.sectionId
+                );
+            }
+        );
+
+        delegateClick(
+            sectionsContainer,
+            '[data-action="open-picker"]',
+            (event, el) => {
+
+                openLinerPickerForSection(
                     el.closest(".song-section")
                         .dataset.sectionId
                 );
@@ -2300,7 +2471,7 @@ function setupRedRoom() {
 
                 const el =
                     event.target.closest(
-                        ".lyrics-editor"
+                        ".section-editor"
                     );
 
                 if (el && sectionsContainer.contains(el)) {
@@ -2319,7 +2490,7 @@ function setupRedRoom() {
 
                 const el =
                     event.target.closest(
-                        ".lyrics-editor"
+                        ".section-editor"
                     );
 
                 if (el && sectionsContainer.contains(el)) {
@@ -2337,12 +2508,45 @@ function setupRedRoom() {
 
                 const el =
                     event.target.closest(
-                        ".lyrics-editor"
+                        ".section-editor"
                     );
 
                 if (el && sectionsContainer.contains(el)) {
 
                     flushLyricsSave();
+                }
+            }
+        );
+
+        sectionsContainer.addEventListener(
+            "keydown",
+            event => {
+
+                const nameInput =
+                    event.target.closest(
+                        "[data-section-name]"
+                    );
+
+                /* Enter / Escape in the label commits and leaves. */
+                if (
+                    nameInput &&
+                    sectionsContainer.contains(nameInput) &&
+                    (
+                        event.key === "Enter" ||
+                        event.key === "Escape"
+                    )
+                ) {
+
+                    event.preventDefault();
+
+                    commitSectionName(
+                        nameInput.dataset.sectionId,
+                        nameInput.value
+                    );
+
+                    nameInput.blur();
+
+                    return;
                 }
             }
         );

@@ -88,7 +88,8 @@ function renderRedRoomSafe(force) {
        merge already updated state and the visual reconciliation
        waits for blur. A different song (or an explicit force) always
        rebuilds, so an explicit song selection can never be swallowed
-       by the focus guard. */
+       by the focus guard. Explicit structural actions (add / move /
+       delete / template) pass force=true so they always paint. */
     const sameSong =
         Boolean(song) &&
         song.id === renderedSongId;
@@ -106,7 +107,7 @@ function renderRedRoomSafe(force) {
         return;
     }
 
-    renderRedRoomContent();
+    renderRedRoomContent(force);
 }
 
 
@@ -133,7 +134,7 @@ function touchSong(song) {
    RENDER RED ROOM
 ========================================================= */
 
-function renderRedRoomContent() {
+function renderRedRoomContent(force) {
 
     const song =
         getCurrentSong();
@@ -163,7 +164,8 @@ function renderRedRoomContent() {
 
         /* Never overwrite the title while it has focus: state
            already holds the in-progress keystrokes. Empty title
-           stays empty; the placeholder shows "UNTITLED". */
+           stays empty; the placeholder shows "UNTITLED". This
+           holds even for forced structural renders. */
         if (document.activeElement !== titleInput) {
 
             const next =
@@ -200,7 +202,7 @@ function renderRedRoomContent() {
         song.id;
 
 
-    renderSections();
+    renderSections(force);
 }
 
 
@@ -208,9 +210,16 @@ function renderRedRoomContent() {
    RENDER SECTIONS
 ========================================================= */
 
-function renderSections() {
+function renderSections(force) {
 
-    if (isRedRoomEditorFocused()) {
+    /* Background renders defer while the writer is focused so the
+       active textarea is never torn down mid-keystroke. Explicit
+       structural actions pass force=true: pending edits are flushed
+       by the caller first, then the list always rebuilds. */
+    if (
+        !force &&
+        isRedRoomEditorFocused()
+    ) {
 
         const focusedSong =
             getCurrentSong();
@@ -265,9 +274,34 @@ function renderSections() {
             .map(
                 (section, index) => {
 
+                    const label =
+                        sectionDisplayLabel(
+                            song,
+                            section
+                        );
+
+                    const labelId =
+                        `section-label-${section.id}`;
+
+                    const editorId =
+                        `section-editor-${section.id}`;
+
+                    const menuId =
+                        `section-menu-${section.id}`;
+
                     const isActive =
                         section.id ===
                         currentSectionId;
+
+                    const upDisabled =
+                        index === 0
+                            ? "disabled"
+                            : "";
+
+                    const downDisabled =
+                        index === song.sections.length - 1
+                            ? "disabled"
+                            : "";
 
 
                     return `
@@ -278,66 +312,125 @@ function renderSections() {
                                     : ""
                             }"
                             data-section-id="${section.id}"
-                            role="button"
-                            tabindex="0"
-                            title="Select section"
                         >
 
-                            <div class="section-top">
+                            <div class="section-bar">
+
+                                <label
+                                    class="visually-hidden"
+                                    for="${labelId}"
+                                >
+                                    Section label
+                                </label>
 
                                 <input
-                                    class="section-type"
+                                    id="${labelId}"
+                                    class="section-name"
                                     type="text"
                                     data-section-id="${section.id}"
+                                    data-section-name
                                     value="${escapeAttribute(
-                                        section.type
+                                        label
                                     )}"
+                                    autocomplete="off"
+                                    spellcheck="false"
                                 >
 
-                                <div class="section-actions">
+                                <div class="section-tools">
 
-                                    <button
-                                        type="button"
-                                        data-action="open-picker"
-                                        title="Insert one liner"
-                                    >
-                                        + LINE
-                                    </button>
+                                    <div class="section-kebab">
 
-                                    <button
-                                        type="button"
-                                        data-action="move-section-up"
-                                        title="Move up"
-                                    >
-                                        ↑
-                                    </button>
+                                        <button
+                                            type="button"
+                                            class="section-kebab-btn"
+                                            data-action="section-menu"
+                                            aria-haspopup="menu"
+                                            aria-expanded="false"
+                                        >
+                                            •••
+                                        </button>
 
-                                    <button
-                                        type="button"
-                                        data-action="move-section-down"
-                                        title="Move down"
-                                    >
-                                        ↓
-                                    </button>
+                                        <div
+                                            id="${menuId}"
+                                            class="section-menu"
+                                            role="menu"
+                                            aria-label="Section actions"
+                                        >
 
-                                    <button
-                                        type="button"
-                                        data-action="delete-section"
-                                        title="Delete section"
-                                    >
-                                        ×
-                                    </button>
+                                            <button
+                                                type="button"
+                                                data-action="focus-section-name"
+                                                role="menuitem"
+                                            >
+                                                RENAME
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                data-action="cycle-section-type"
+                                                role="menuitem"
+                                            >
+                                                CHANGE TYPE
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                data-action="move-section-up"
+                                                role="menuitem"
+                                                ${upDisabled}
+                                            >
+                                                MOVE UP
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                data-action="move-section-down"
+                                                role="menuitem"
+                                                ${downDisabled}
+                                            >
+                                                MOVE DOWN
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                data-action="duplicate-section"
+                                                role="menuitem"
+                                            >
+                                                DUPLICATE
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                class="danger"
+                                                data-action="delete-section"
+                                                role="menuitem"
+                                            >
+                                                DELETE
+                                            </button>
+
+                                        </div>
+
+                                    </div>
 
                                 </div>
 
                             </div>
 
 
+                            <label
+                                class="visually-hidden"
+                                for="${editorId}"
+                            >
+                                Lyrics
+                            </label>
+
                             <textarea
-                                class="lyrics-editor"
+                                id="${editorId}"
+                                class="section-editor"
                                 data-editor="${section.id}"
                                 data-section-id="${section.id}"
                                 placeholder="Write here..."
+                                rows="6"
                             >${escapeHTML(
                                 section.lyrics
                             )}</textarea>
@@ -394,26 +487,33 @@ function refreshSectionCard(sectionId) {
         currentSectionId
     );
 
-    const typeInput =
-        card.querySelector(".section-type");
+    const nameInput =
+        card.querySelector(
+            "[data-section-name]"
+        );
 
-    /* Never overwrite the type input while it has focus: the user
-       may be mid-word and state already holds their keystrokes. */
+    /* Never overwrite the label input while it has focus: state
+       already holds the in-progress keystrokes. */
     if (
-        typeInput &&
-        document.activeElement !== typeInput
+        nameInput &&
+        document.activeElement !== nameInput
     ) {
 
         const next =
-            section.type || "";
+            sectionDisplayLabel(
+                song,
+                section
+            );
 
-        if (typeInput.value !== next) {
-            typeInput.value = next;
+        if (nameInput.value !== next) {
+            nameInput.value = next;
         }
     }
 
     const editor =
-        card.querySelector(".lyrics-editor");
+        card.querySelector(
+            ".section-editor"
+        );
 
     /* Never overwrite the focused textarea. State already holds
        the local keystrokes; remote text applies on blur render. */
@@ -581,6 +681,20 @@ function renameSection(
     value
 ) {
 
+    commitSectionName(
+        sectionId,
+        value
+    );
+}
+
+/* Direct label editing: the visible text is a custom display
+   name layered over the structural type. Typing never destroys
+   the type, and clearing falls back to TYPE + number. */
+function commitSectionName(
+    sectionId,
+    value
+) {
+
     const song =
         getCurrentSong();
 
@@ -603,14 +717,12 @@ function renameSection(
 
 
     const clean =
-        String(value)
+        String(value || "")
             .trim();
 
 
-    section.type =
-        clean
-            ? clean.toUpperCase()
-            : "SECTION";
+    section.name =
+        clean;
 
 
     touchSong(song);
@@ -625,29 +737,198 @@ function renameSection(
    ADD SECTION
 ========================================================= */
 
+function flushRedRoomEdits() {
+
+    if (typeof flushLyricsSave === "function") {
+        flushLyricsSave();
+    }
+
+    if (typeof flushTitleSave === "function") {
+        flushTitleSave();
+    }
+}
+
+function structuralRender() {
+
+    if (typeof consumeRenderDeferred === "function") {
+        consumeRenderDeferred();
+    }
+
+    renderRedRoomSafe(true);
+}
+
+/* Last deleted section, kept briefly so Delete can offer UNDO.
+   Restores content, type, label and position on demand. */
+let lastDeletedSection = null;
+let lastDeletedSectionTimer = null;
+
+function clearDeletedSectionMemory() {
+
+    lastDeletedSection = null;
+
+    if (lastDeletedSectionTimer) {
+
+        clearTimeout(
+            lastDeletedSectionTimer
+        );
+
+        lastDeletedSectionTimer = null;
+    }
+}
+
+function rememberDeletedSection(
+    songId,
+    section,
+    index
+) {
+
+    clearDeletedSectionMemory();
+
+    lastDeletedSection = {
+        songId,
+        section,
+        index
+    };
+
+    lastDeletedSectionTimer =
+        setTimeout(
+            clearDeletedSectionMemory,
+            30000
+        );
+}
+
+/* Per-type numbering: VERSE 01 / VERSE 02 / CHORUS 01, derived
+   from position among same-type sections so reorder stays sane. */
+function sectionDisplayNumber(
+    song,
+    section
+) {
+
+    const sameType =
+        (song.sections || []).filter(
+            item =>
+                (
+                    item.type ||
+                    "SECTION"
+                ).toUpperCase() ===
+                (
+                    section.type ||
+                    "SECTION"
+                ).toUpperCase()
+        );
+
+    const position =
+        sameType.findIndex(
+            item =>
+                item.id === section.id
+        );
+
+    return String(
+        (position === -1 ? sameType.length : position) + 1
+    ).padStart(2, "0");
+}
+
+function sectionDisplayLabel(
+    song,
+    section
+) {
+
+    /* A custom label always wins; otherwise show TYPE + number. */
+    if (
+        section.name &&
+        String(section.name).trim()
+    ) {
+        return String(section.name).trim();
+    }
+
+    return `${(section.type || "SECTION").toUpperCase()} ${
+        sectionDisplayNumber(song, section)
+    }`;
+}
+
+function isSongStarted(song) {
+
+    if (!song || !Array.isArray(song.sections)) {
+        return true;
+    }
+
+    /* More than the single starter card counts as manual work. */
+    if (song.sections.length > 1) {
+        return true;
+    }
+
+    const first = song.sections[0];
+
+    if (!first) {
+        return true;
+    }
+
+    return Boolean(
+        String(first.lyrics || "").trim()
+    );
+}
+
+function isFreshSong(song) {
+
+    if (!song || !Array.isArray(song.sections)) {
+        return false;
+    }
+
+    if (
+        song.sections.length !== 1 ||
+        isSongStarted(song)
+    ) {
+        return false;
+    }
+
+    return (
+        (song.sections[0].type || "VERSE").toUpperCase() ===
+        "VERSE"
+    );
+}
+
 function addSection(
-    type = "VERSE"
+    type = "VERSE",
+    options = {}
 ) {
 
     const song =
         getCurrentSong();
 
     if (!song) {
-        return;
+        return null;
     }
 
+
+    /* Capture pending keystrokes into state before rebuilding so
+       the forced render never drops in-flight typing. */
+    if (!options.silent) {
+        flushRedRoomEdits();
+    }
+
+
+    const canonical =
+        String(type || "VERSE")
+            .trim()
+            .toUpperCase() ||
+        "VERSE";
+
+    const customName =
+        options.name
+            ? String(options.name).trim()
+            : "";
 
     const section = {
 
         id:
             generateId(),
 
-        type:
-            String(type)
-                .toUpperCase(),
+        type: canonical,
+
+        name: customName,
 
         lyrics:
-            ""
+            options.lyrics || ""
     };
 
 
@@ -664,21 +945,31 @@ function addSection(
 
     saveState();
 
-    renderRedRoomSafe();
+    if (!options.deferRender) {
+        structuralRender();
+    }
+
+    closeTemplateMenu();
 
 
-    setTimeout(() => {
+    if (!options.deferFocus) {
 
-        const editor =
-            document.querySelector(
-                `[data-editor="${section.id}"]`
-            );
+        const focusId = section.id;
 
-        if (editor) {
-            editor.focus();
-        }
+        requestAnimationFrame(() => {
 
-    }, 50);
+            const editor =
+                document.querySelector(
+                    `[data-editor="${focusId}"]`
+                );
+
+            if (editor) {
+                editor.focus();
+            }
+        });
+    }
+
+    return section;
 }
 
 
@@ -688,14 +979,10 @@ function addSection(
 
 function deleteSection(id) {
 
-    if (isRedRoomEditorFocused()) {
-
-        if (typeof markRenderDeferred === "function") {
-            markRenderDeferred();
-        }
-
-        return;
-    }
+    /* Explicit user action: flush first, then mutate and force the
+       render. The old focus-guard early return meant clicking delete
+       while typing silently did nothing. */
+    flushRedRoomEdits();
 
 
     const song =
@@ -718,9 +1005,20 @@ function deleteSection(id) {
     }
 
 
+    const section =
+        song.sections[index];
+
+
     song.sections.splice(
         index,
         1
+    );
+
+
+    rememberDeletedSection(
+        song.id,
+        section,
+        index
     );
 
 
@@ -742,7 +1040,9 @@ function deleteSection(id) {
 
     saveState();
 
-    renderRedRoom();
+    structuralRender();
+
+    showSectionUndo();
 }
 
 
@@ -752,15 +1052,8 @@ function deleteSection(id) {
 
 function moveSection(id, delta) {
 
-    if (isRedRoomEditorFocused()) {
-
-        if (typeof markRenderDeferred === "function") {
-            markRenderDeferred();
-        }
-
-        return;
-    }
-
+    /* Same explicit-action rule as delete: flush, mutate, force. */
+    flushRedRoomEdits();
 
     const song =
         getCurrentSong();
@@ -809,12 +1102,242 @@ function moveSection(id, delta) {
 
     saveState();
 
-    renderRedRoom();
+    structuralRender();
 }
 
 
 /* =========================================================
-   SAVE SONG
+   DUPLICATE / RENAME / RETYPE / UNDO
+========================================================= */
+
+function duplicateSection(id) {
+
+    flushRedRoomEdits();
+
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return null;
+    }
+
+    const index =
+        song.sections.findIndex(
+            section =>
+                section.id === id
+        );
+
+    if (index === -1) {
+        return null;
+    }
+
+    const source =
+        song.sections[index];
+
+    const copy = {
+
+        id: generateId(),
+
+        type:
+            (source.type || "SECTION").toUpperCase(),
+
+        name: source.name || "",
+
+        lyrics: source.lyrics || ""
+    };
+
+    song.sections.splice(
+        index + 1,
+        0,
+        copy
+    );
+
+    currentSectionId =
+        copy.id;
+
+    touchSong(song);
+
+    saveState();
+
+    structuralRender();
+
+    return copy;
+}
+
+function retitleSection(
+    sectionId,
+    value
+) {
+
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return;
+    }
+
+    const section =
+        song.sections.find(
+            section =>
+                section.id ===
+                sectionId
+        );
+
+    if (!section) {
+        return;
+    }
+
+    const clean =
+        String(value || "").trim();
+
+    /* Empty label clears the custom name and falls back to the
+       automatic TYPE + number display. */
+    section.name = clean;
+
+    touchSong(song);
+
+    beginLiveEdit();
+
+    saveState();
+}
+
+function changeSectionType(
+    sectionId,
+    nextType
+) {
+
+    flushRedRoomEdits();
+
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return;
+    }
+
+    const section =
+        song.sections.find(
+            section =>
+                section.id ===
+                sectionId
+        );
+
+    if (!section) {
+        return;
+    }
+
+    const canonical =
+        String(nextType || "")
+            .trim()
+            .toUpperCase() ||
+        section.type ||
+        "SECTION";
+
+    section.type = canonical;
+
+    touchSong(song);
+
+    saveState();
+
+    structuralRender();
+}
+
+function showSectionUndo() {
+
+    const bar =
+        document.getElementById(
+            "section-undo-bar"
+        );
+
+    if (!bar) {
+        return;
+    }
+
+    bar.hidden = false;
+
+    const button =
+        document.getElementById(
+            "section-undo-button"
+        );
+
+    button?.focus({
+        preventScroll: true
+    });
+}
+
+function hideSectionUndo() {
+
+    const bar =
+        document.getElementById(
+            "section-undo-bar"
+        );
+
+    if (bar) {
+        bar.hidden = true;
+    }
+
+    clearDeletedSectionMemory();
+}
+
+function undoDeleteSection() {
+
+    if (!lastDeletedSection) {
+        return;
+    }
+
+    const song =
+        state.songs.find(
+            song =>
+                song.id ===
+                lastDeletedSection.songId
+        );
+
+    if (!song) {
+
+        hideSectionUndo();
+
+        return;
+    }
+
+    flushRedRoomEdits();
+
+    if (!Array.isArray(song.sections)) {
+        song.sections = [];
+    }
+
+    const at =
+        Math.min(
+            Math.max(
+                0,
+                lastDeletedSection.index
+            ),
+            song.sections.length
+        );
+
+    song.sections.splice(
+        at,
+        0,
+        lastDeletedSection.section
+    );
+
+    currentSectionId =
+        lastDeletedSection.section.id;
+
+    currentSongId =
+        song.id;
+
+    touchSong(song);
+
+    saveState();
+
+    hideSectionUndo();
+
+    structuralRender();
+}
+
+
+/* =========================================================
+   SAVE SONG (autosave supports this; kept for callers)
 ========================================================= */
 
 function saveSong() {
@@ -863,9 +1386,265 @@ function saveSong() {
         saveStatus.textContent =
             "SAVED";
     }
+}
 
-    /* Save & Exit: head back to the crate */
-    leaveSong();
+
+/* Autosave-first exit: flush pending edits, preserve the song
+   identity, then return to CRATE. Nothing is duplicated. */
+function exitToCrate() {
+
+    flushRedRoomEdits();
+
+    const song =
+        getCurrentSong();
+
+    if (song) {
+
+        touchSong(song);
+
+        saveState();
+    }
+
+    hideSectionUndo();
+
+    closeTemplateMenu();
+
+    closeSectionTypeMenu();
+
+    closeOpenSectionMenus();
+
+    showView("crate");
+}
+
+
+/* =========================================================
+   SECTION TYPE MENU (+ SECTION selector)
+========================================================= */
+
+const SECTION_TYPE_ORDER = [
+    "VERSE",
+    "CHORUS",
+    "PRE-CHORUS",
+    "BRIDGE",
+    "INTRO",
+    "OUTRO"
+];
+
+function toggleSectionTypeMenu() {
+
+    const menu =
+        document.getElementById(
+            "section-type-menu"
+        );
+
+    const button =
+        document.getElementById(
+            "add-section-button"
+        );
+
+    if (!menu) {
+
+        addSection("VERSE");
+
+        return;
+    }
+
+    if (menu.classList.contains("open")) {
+
+        closeSectionTypeMenu();
+
+    } else {
+
+        openSectionTypeMenu();
+
+    }
+
+}
+
+function openSectionTypeMenu() {
+
+    closeTemplateMenu();
+
+    const menu =
+        document.getElementById(
+            "section-type-menu"
+        );
+
+    const button =
+        document.getElementById(
+            "add-section-button"
+        );
+
+    if (!menu) {
+
+        addSection("VERSE");
+
+        return;
+    }
+
+    menu.classList.add(
+        "open"
+    );
+
+    if (button) {
+
+        button.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+    }
+
+    menu
+        .querySelector(
+            "button"
+        )
+        ?.focus({
+            preventScroll: true
+        });
+}
+
+function closeSectionTypeMenu() {
+
+    const menu =
+        document.getElementById(
+            "section-type-menu"
+        );
+
+    const button =
+        document.getElementById(
+            "add-section-button"
+        );
+
+    if (!menu) {
+        return;
+    }
+
+    menu.classList.remove(
+        "open"
+    );
+
+    if (button) {
+
+        button.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+    }
+}
+
+function addSectionFromMenu(sectionType) {
+
+    closeSectionTypeMenu();
+
+    if (
+        !sectionType ||
+        sectionType === "custom"
+    ) {
+
+        createCustomSection();
+
+        return;
+    }
+
+    addSection(
+        sectionType
+    );
+}
+
+/* Change type keeps the custom label intact: the visible name
+   only falls back to TYPE + number when no label was set. */
+function cycleSectionType(sectionId) {
+
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return;
+    }
+
+    const section =
+        song.sections.find(
+            section =>
+                section.id ===
+                sectionId
+        );
+
+    if (!section) {
+        return;
+    }
+
+    const current =
+        (section.type || "VERSE").toUpperCase();
+
+    const at =
+        SECTION_TYPE_ORDER.indexOf(
+            current
+        );
+
+    const next =
+        SECTION_TYPE_ORDER[
+            (at + 1) %
+            SECTION_TYPE_ORDER.length
+        ] || "VERSE";
+
+    changeSectionType(
+        sectionId,
+        next
+    );
+}
+
+function toggleSectionMenu(button) {
+
+    const kebab =
+        button.closest(
+            ".section-kebab"
+        );
+
+    if (!kebab) {
+        return;
+    }
+
+    const wasOpen =
+        kebab.classList.contains(
+            "open"
+        );
+
+    closeOpenSectionMenus();
+
+    if (!wasOpen) {
+
+        kebab.classList.add(
+            "open"
+        );
+
+        button.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+    }
+}
+
+function closeOpenSectionMenus() {
+
+    document
+        .querySelectorAll(
+            ".section-kebab.open"
+        )
+        .forEach(kebab => {
+
+            kebab.classList.remove(
+                "open"
+            );
+
+            kebab
+                .querySelector(
+                    ".section-kebab-btn"
+                )
+                ?.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+        });
 }
 
 
@@ -945,6 +1724,11 @@ function flushTitleSave() {
    TEMPLATE MENU
 ========================================================= */
 
+function toggleTemplateMenu() {
+
+    openTemplateMenu();
+}
+
 function openTemplateMenu() {
 
     const menu =
@@ -952,14 +1736,56 @@ function openTemplateMenu() {
             "template-menu"
         );
 
+    const button =
+        document.getElementById(
+            "template-button"
+        );
+
     if (!menu) {
         return;
     }
 
+    const willOpen =
+        !menu.classList.contains(
+            "open"
+        );
+
+    closeSectionTypeMenu();
 
     menu.classList.toggle(
         "open"
     );
+
+    if (
+        willOpen &&
+        typeof refreshTemplateMenuState ===
+            "function"
+    ) {
+        refreshTemplateMenuState();
+    }
+
+    if (willOpen) {
+
+        button?.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+
+        menu
+            .querySelector(
+                "button:not([disabled])"
+            )
+            ?.focus({
+                preventScroll: true
+            });
+
+    } else {
+
+        button?.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+    }
 }
 
 
@@ -970,6 +1796,11 @@ function closeTemplateMenu() {
             "template-menu"
         );
 
+    const button =
+        document.getElementById(
+            "template-button"
+        );
+
     if (!menu) {
         return;
     }
@@ -978,6 +1809,127 @@ function closeTemplateMenu() {
     menu.classList.remove(
         "open"
     );
+
+    button?.setAttribute(
+        "aria-expanded",
+        "false"
+    );
+}
+
+
+/* Templates start songs; they never restructure started work.
+   The menu disables structure buttons with an explanation once
+   meaningful writing or manual structure exists. */
+function refreshTemplateMenuState() {
+
+    const song =
+        getCurrentSong();
+
+    const menu =
+        document.getElementById(
+            "template-menu"
+        );
+
+    const button =
+        document.getElementById(
+            "template-button"
+        );
+
+    if (!menu) {
+        return;
+    }
+
+    const fresh =
+        isFreshSong(song);
+
+    menu
+        .querySelectorAll(
+            "[data-template]"
+        )
+        .forEach(item => {
+
+            const isStructure =
+                item.dataset.template !==
+                "custom";
+
+            if (
+                isStructure &&
+                !fresh
+            ) {
+
+                item.setAttribute(
+                    "disabled",
+                    ""
+                );
+
+                item.setAttribute(
+                    "title",
+                    "Templates are available before you start writing."
+                );
+
+            } else {
+
+                item.removeAttribute(
+                    "disabled"
+                );
+
+                item.removeAttribute(
+                    "title"
+                );
+            }
+        });
+
+    let note =
+        menu.querySelector(
+            ".template-note"
+        );
+
+    if (!fresh) {
+
+        if (!note) {
+
+            note =
+                document.createElement(
+                    "p"
+                );
+
+            note.className =
+                "template-note";
+
+            menu.appendChild(
+                note
+            );
+        }
+
+        note.textContent =
+            "Templates are available before you start writing.";
+
+    } else if (note) {
+
+        note.remove();
+    }
+
+    if (button) {
+
+        button.classList.toggle(
+            "is-disabled",
+            !fresh
+        );
+
+        button.setAttribute(
+            "aria-disabled",
+            fresh
+                ? "false"
+                : "true"
+        );
+
+        button.setAttribute(
+            "title",
+            fresh
+                ? "Start with a structure"
+                : "Templates are available before you start writing."
+        );
+    }
 }
 
 
@@ -989,10 +1941,68 @@ function applyTemplate(
     template
 ) {
 
-    closeTemplateMenu();
+    if (
+        template === "custom"
+    ) {
+
+        closeTemplateMenu();
+
+        createCustomSection();
+
+        return;
+    }
 
 
-    const types = {
+    const song =
+        getCurrentSong();
+
+    if (!song) {
+        return;
+    }
+
+
+    /* Templates only start fresh songs; started songs keep every
+       lyric they already have. */
+    if (!isFreshSong(song)) {
+
+        refreshTemplateMenuState();
+
+        return;
+    }
+
+    flushRedRoomEdits();
+
+
+    const structures = {
+
+        basic: [
+            "VERSE",
+            "CHORUS",
+            "VERSE",
+            "CHORUS"
+        ],
+
+        build: [
+            "VERSE",
+            "PRE-CHORUS",
+            "CHORUS",
+            "VERSE",
+            "PRE-CHORUS",
+            "CHORUS"
+        ],
+
+        journey: [
+            "INTRO",
+            "VERSE",
+            "CHORUS",
+            "VERSE",
+            "BRIDGE",
+            "CHORUS",
+            "OUTRO"
+        ]
+    };
+
+    const singles = {
 
         verse: "VERSE",
 
@@ -1008,18 +2018,47 @@ function applyTemplate(
     };
 
 
-    if (
-        template === "custom"
-    ) {
+    closeTemplateMenu();
 
-        createCustomSection();
+    const wanted =
+        structures[template];
+
+    if (wanted) {
+
+        song.sections = [];
+
+        currentSectionId = null;
+
+        wanted.forEach(type => {
+
+            addSection(
+                type,
+                {
+                    silent: true,
+                    deferRender: true,
+                    deferFocus: true
+                }
+            );
+        });
+
+        currentSectionId =
+            song.sections[0]?.id ||
+            null;
+
+        touchSong(song);
+
+        saveState();
+
+        structuralRender();
+
+        refreshTemplateMenuState();
 
         return;
     }
 
 
     addSection(
-        types[template] ||
+        singles[template] ||
         "SECTION"
     );
 }
@@ -1078,16 +2117,17 @@ function createCustomSection() {
                 input?.value.trim();
 
 
-            if (!name) {
-                return;
+            if (name) {
+
+                addSection(
+                    "SECTION",
+                    {
+                        name
+                    }
+                );
+
+                closeModal();
             }
-
-
-            addSection(
-                name
-            );
-
-            closeModal();
         });
     }
 
@@ -1145,7 +2185,7 @@ function cycleSongStatus() {
 
     saveState();
 
-    renderRedRoom();
+    structuralRender();
 }
 
 
@@ -1154,6 +2194,11 @@ function cycleSongStatus() {
 ========================================================= */
 
 function leaveSong() {
+
+    flushLyricsSave();
+    flushTitleSave();
+
+    hideSectionUndo();
 
     currentSongId = null;
     currentSectionId = null;

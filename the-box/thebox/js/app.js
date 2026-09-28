@@ -1343,12 +1343,12 @@ function setupLiners() {
             "keydown",
             event => {
 
+                /* Capture speed: plain Enter saves a verse so
+                   adding stays one keypress; Shift+Enter keeps
+                   a newline for multi-line writing. */
                 if (
                     event.key === "Enter" &&
-                    (
-                        event.ctrlKey ||
-                        event.metaKey
-                    )
+                    !event.shiftKey
                 ) {
 
                     event.preventDefault();
@@ -1377,7 +1377,89 @@ function setupLiners() {
                     );
                 }
             );
+
+            /* Arrow keys move between the two mode tabs. */
+            button.addEventListener(
+                "keydown",
+                event => {
+
+                    if (
+                        event.key !== "ArrowRight" &&
+                        event.key !== "ArrowLeft"
+                    ) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    const tabs =
+                        [...document.querySelectorAll(
+                            ".liner-tab"
+                        )];
+
+                    const index =
+                        tabs.indexOf(button);
+
+                    const next =
+                        event.key === "ArrowRight"
+                            ? tabs[(index + 1) % tabs.length]
+                            : tabs[
+                                (index - 1 + tabs.length) %
+                                tabs.length
+                            ];
+
+                    next?.focus();
+
+                    setLinerView(
+                        next?.dataset.linerview ||
+                        "lines",
+                        next
+                    );
+                }
+            );
         });
+
+
+    const quickAddButton =
+        document.getElementById(
+            "liner-quickadd-button"
+        );
+
+    if (quickAddButton) {
+
+        quickAddButton.addEventListener(
+            "click",
+            focusLinerComposer
+        );
+    }
+
+
+    /* Tapping outside an open ••• menu closes it. */
+    document.addEventListener(
+        "click",
+        event => {
+
+            if (
+                !event.target.closest(
+                    ".liner-kebab"
+                )
+            ) {
+                closeOpenLinerMenus();
+            }
+        }
+    );
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Escape"
+            ) {
+                closeOpenLinerMenus();
+            }
+        }
+    );
 
 
     document
@@ -1418,8 +1500,30 @@ function setupLiners() {
 
         delegateClick(
             list,
+            '[data-action="menu-item"]',
+            (event, el) => {
+
+                event.stopPropagation();
+
+                toggleLinerMenu(el);
+            }
+        );
+
+        delegateClick(
+            list,
+            '[data-action="focus-composer"]',
+            () => {
+
+                focusLinerComposer();
+            }
+        );
+
+        delegateClick(
+            list,
             '[data-action="insert-item"]',
             (event, el) => {
+
+                closeOpenLinerMenus();
 
                 const itemId =
                     el.closest(".liner")
@@ -1441,6 +1545,8 @@ function setupLiners() {
             '[data-action="edit-item"]',
             (event, el) => {
 
+                closeOpenLinerMenus();
+
                 const itemId =
                     el.closest(".liner")
                         .dataset.itemId;
@@ -1460,6 +1566,8 @@ function setupLiners() {
             list,
             '[data-action="delete-item"]',
             (event, el) => {
+
+                closeOpenLinerMenus();
 
                 const itemId =
                     el.closest(".liner")

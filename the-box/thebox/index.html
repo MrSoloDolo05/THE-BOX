@@ -426,32 +426,43 @@
                         </div>
 
 
-                        <button
-                            id="liner-import-button"
-                            class="small-btn"
-                            data-import-open
-                            type="button"
-                        >
-                            IMPORT LINES
-                        </button>
+                        <div class="liner-mode-row">
 
+                            <div class="liner-tabs" role="tablist" aria-label="One Liners mode">
 
-                        <div class="liner-tabs">
+                                <button
+                                    id="liner-tab-lines"
+                                    class="liner-tab active"
+                                    data-linerview="lines"
+                                    type="button"
+                                    role="tab"
+                                    aria-selected="true"
+                                    aria-controls="liner-list"
+                                >
+                                    LINE
+                                </button>
+
+                                <button
+                                    id="liner-tab-verses"
+                                    class="liner-tab"
+                                    data-linerview="verses"
+                                    type="button"
+                                    role="tab"
+                                    aria-selected="false"
+                                    aria-controls="verse-list"
+                                >
+                                    VERSE
+                                </button>
+
+                            </div>
 
                             <button
-                                class="liner-tab active"
-                                data-linerview="lines"
+                                id="liner-import-button"
+                                class="small-btn liner-import-btn"
+                                data-import-open
                                 type="button"
                             >
-                                LINES
-                            </button>
-
-                            <button
-                                class="liner-tab"
-                                data-linerview="verses"
-                                type="button"
-                            >
-                                VERSES
+                                IMPORT LINES
                             </button>
 
                         </div>
@@ -459,10 +470,16 @@
 
                         <div class="add-liner">
 
+                            <label class="visually-hidden" for="liner-input">
+                                Write a line
+                            </label>
+
                             <input
                                 id="liner-input"
                                 type="text"
                                 placeholder="Write a line..."
+                                enterkeyhint="done"
+                                autocomplete="off"
                             >
 
                             <button
@@ -478,9 +495,14 @@
 
                         <div class="add-verse">
 
+                            <label class="visually-hidden" for="verse-input">
+                                Write a verse
+                            </label>
+
                             <textarea
                                 id="verse-input"
-                                placeholder="Write a verse..."
+                                placeholder="Write a verse... (Enter to save, Shift + Enter for a new line)"
+                                enterkeyhint="enter"
                             ></textarea>
 
                             <button
@@ -525,14 +547,30 @@
 
                         <div
                             id="liner-list"
-                            class="liner-list"
+                            class="liner-list liner-list--lines"
+                            role="tabpanel"
+                            aria-labelledby="liner-tab-lines"
                         ></div>
 
                         <div
                             id="verse-list"
-                            class="liner-list"
+                            class="liner-list liner-list--verses"
+                            role="tabpanel"
+                            aria-labelledby="liner-tab-verses"
                             style="display:none"
                         ></div>
+
+                        <div class="liner-quickadd" aria-hidden="false">
+
+                            <button
+                                id="liner-quickadd-button"
+                                class="liner-quickadd-btn"
+                                type="button"
+                            >
+                                + ADD LINE
+                            </button>
+
+                        </div>
 
                     </section>
 

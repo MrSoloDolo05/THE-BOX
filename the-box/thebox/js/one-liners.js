@@ -47,6 +47,8 @@ function addLiner() {
 
     input.value = "";
 
+    input.focus();
+
     saveState();
 
     renderLiners();
@@ -97,9 +99,98 @@ function addVerse() {
 
     input.value = "";
 
+    input.focus();
+
     saveState();
 
     renderLiners();
+}
+
+
+/* =========================================================
+   LINER KEBAB MENU (presentation only)
+========================================================= */
+
+function closeOpenLinerMenus() {
+
+    document
+        .querySelectorAll(
+            ".liner-kebab.open"
+        )
+        .forEach(kebab => {
+
+            kebab.classList.remove(
+                "open"
+            );
+
+            kebab
+                .querySelector(
+                    ".liner-kebab-btn"
+                )
+                ?.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+        });
+}
+
+function toggleLinerMenu(button) {
+
+    const kebab =
+        button.closest(
+            ".liner-kebab"
+        );
+
+    if (!kebab) {
+        return;
+    }
+
+    const wasOpen =
+        kebab.classList.contains(
+            "open"
+        );
+
+    closeOpenLinerMenus();
+
+    if (!wasOpen) {
+
+        kebab.classList.add(
+            "open"
+        );
+
+        button.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+    }
+}
+
+function focusLinerComposer() {
+
+    const target =
+        document.getElementById(
+            linerView === "verses"
+                ? "verse-input"
+                : "liner-input"
+        );
+
+    if (!target) {
+        return;
+    }
+
+    target.scrollIntoView({
+        behavior:
+            window.matchMedia(
+                "(prefers-reduced-motion: reduce)"
+            ).matches
+                ? "auto"
+                : "smooth",
+        block: "center"
+    });
+
+    target.focus({
+        preventScroll: true
+    });
 }
 
 
@@ -158,13 +249,19 @@ function setLinerView(
 
     linerView = view;
 
-    /* Two-tone environment hook for CSS: light LINE mode vs dark
-       VERSE mode. Pure presentation; no data behavior changes. */
+
+    const isVerses =
+        view === "verses";
+
+
+    /* Two-tone environment hook for CSS: sage-lit LINE mode vs
+       dimmed forest VERSE mode. Pure presentation; no data
+       behavior changes. */
     document
         .getElementById("app")
         ?.setAttribute(
             "data-liners",
-            view === "verses"
+            isVerses
                 ? "verses"
                 : "lines"
         );
@@ -176,15 +273,74 @@ function setLinerView(
         )
         .forEach(btn => {
 
+            const isActive =
+                btn.dataset.linerview ===
+                view;
+
             btn.classList.toggle(
                 "active",
-                btn.dataset.linerview ===
-                view
+                isActive
+            );
+
+            btn.setAttribute(
+                "aria-selected",
+                isActive
+                    ? "true"
+                    : "false"
             );
         });
 
 
+    const quickAdd =
+        document.getElementById(
+            "liner-quickadd-button"
+        );
+
+    if (quickAdd) {
+
+        quickAdd.textContent =
+            isVerses
+                ? "+ ADD VERSE"
+                : "+ ADD LINE";
+
+        quickAdd.setAttribute(
+            "aria-label",
+            isVerses
+                ? "Add verse"
+                : "Add line"
+        );
+    }
+
+
     renderLiners();
+
+
+    /* Capture speed: input is immediately ready after a mode
+       switch so the mobile keyboard opens at once. Skip the
+       focus move when the user is tabbing through controls. */
+    const focusTarget =
+        document.getElementById(
+            isVerses
+                ? "verse-input"
+                : "liner-input"
+        );
+
+    const activeIsTab =
+        button &&
+        document.activeElement === button;
+
+    if (
+        focusTarget &&
+        !activeIsTab &&
+        !window.matchMedia(
+            "(pointer: coarse)"
+        ).matches
+    ) {
+
+        focusTarget.focus({
+            preventScroll: true
+        });
+    }
 }
 
 
@@ -284,9 +440,32 @@ function renderLiners() {
 
     if (!items.length) {
 
+        const isVerseEmpty =
+            !isLines;
+
         container.innerHTML = `
-            <div class="empty-state">
-                NOTHING HERE YET.
+            <div class="liner-empty">
+                <h3>${
+                    isVerseEmpty
+                        ? "No verses yet."
+                        : "Nothing here yet."
+                }</h3>
+                <p>${
+                    isVerseEmpty
+                        ? "Build something from the fragments."
+                        : "Catch it before you forget it."
+                }</p>
+                <button
+                    class="liner-empty-btn"
+                    data-action="focus-composer"
+                    type="button"
+                >
+                    ${
+                        isVerseEmpty
+                            ? "+ ADD VERSE"
+                            : "+ ADD LINE"
+                    }
+                </button>
             </div>
         `;
 
@@ -305,15 +484,59 @@ function renderLiners() {
             : "verse-text";
 
 
+    const sortedItems =
+        [...items].reverse();
+
+
     container.innerHTML =
         items
-            .map(item => {
+            .map((item, displayIndex) => {
+
+                const verseNumber =
+                    !isLines
+                        ? String(
+                            displayIndex + 1
+                        ).padStart(2, "0")
+                        : "";
+
 
                 const usages =
                     getUsages(
                         item
                     );
 
+                const kindLabel =
+                    isLines
+                        ? "line"
+                        : "verse";
+
+                const editLabel =
+                    escapeAttribute(
+                        item.text.slice(0, 80) ||
+                        kindLabel
+                    );
+
+                const insertButton =
+                    currentSongId
+                        ? `
+                            <button
+                                type="button"
+                                data-action="insert-item"
+                                role="menuitem"
+                            >
+                                USE IN SONG
+                            </button>
+                        `
+                        : "";
+
+                const verseKicker =
+                    !isLines
+                        ? `
+                            <div class="verse-kicker">
+                                VERSE ${verseNumber}
+                            </div>
+                        `
+                        : "";
 
                 return `
                     <div
@@ -321,9 +544,18 @@ function renderLiners() {
                         data-item-id="${item.id}"
                     >
 
+                        ${verseKicker}
+
                         <div class="liner-top">
 
-                            <div class="liner-text ${textClass}">
+                            <button
+                                class="liner-main"
+                                type="button"
+                                data-action="edit-item"
+                                aria-label="Edit ${kindLabel}: ${editLabel}"
+                            >
+
+                                <span class="liner-text ${textClass}">
                                 ${
                                     isLines
                                         ? `“${escapeHTML(
@@ -333,47 +565,47 @@ function renderLiners() {
                                             item.text
                                         )
                                 }
-                            </div>
+                                </span>
 
-                            <div class="liner-meta">
-                                ${
-                                    usages.length
-                                        ? `USED ${usages.length}`
-                                        : "UNUSED"
-                                }
-                            </div>
+                            </button>
 
-                            <div class="liner-actions">
-
-                                ${
-                                    currentSongId
-                                        ? `
-                                            <button
-                                                type="button"
-                                                data-action="insert-item"
-                                                title="Insert"
-                                            >
-                                                ↳
-                                            </button>
-                                        `
-                                        : ""
-                                }
+                            <div class="liner-kebab">
 
                                 <button
+                                    class="liner-kebab-btn"
                                     type="button"
-                                    data-action="edit-item"
-                                    title="Edit"
+                                    data-action="menu-item"
+                                    aria-haspopup="menu"
+                                    aria-expanded="false"
                                 >
-                                    ✎
+                                    •••
                                 </button>
 
-                                <button
-                                    type="button"
-                                    data-action="delete-item"
-                                    title="Delete"
+                                <div
+                                    class="liner-menu"
+                                    role="menu"
                                 >
-                                    ×
-                                </button>
+
+                                    <button
+                                        type="button"
+                                        data-action="edit-item"
+                                        role="menuitem"
+                                    >
+                                        EDIT
+                                    </button>
+
+                                    ${insertButton}
+
+                                    <button
+                                        class="danger"
+                                        type="button"
+                                        data-action="delete-item"
+                                        role="menuitem"
+                                    >
+                                        DELETE
+                                    </button>
+
+                                </div>
 
                             </div>
 

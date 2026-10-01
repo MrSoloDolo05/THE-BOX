@@ -1583,6 +1583,15 @@ function permanentlyDelete(id) {
        that an older copy still in flight could restore. */
     forgetLocalEditsFor(doomed);
 
+    /* Same as emptyTrash: the merge rebuilds trash rows from the
+       tombstones, so a row removed without clearing its tombstone
+       reappears on the next push. This is the permanent delete. */
+    if (doomed && doomed.data && doomed.data.id) {
+        unmarkRecordDeleted(
+            doomed.data.id
+        );
+    }
+
     saveState();
 
     renderTrash();
@@ -1616,7 +1625,20 @@ function emptyTrash() {
         return;
     }
 
-    state.trash.forEach(forgetLocalEditsFor);
+    /* Clearing the list is not enough: the sync merge rebuilds trash
+       rows from deletedRecordIds, so a surviving tombstone would
+       bring every emptied item straight back on the next push.
+       Drop the tombstone too, which is what makes this permanent. */
+    state.trash.forEach(item => {
+
+        forgetLocalEditsFor(item);
+
+        if (item && item.data && item.data.id) {
+            unmarkRecordDeleted(
+                item.data.id
+            );
+        }
+    });
 
     state.trash = [];
 

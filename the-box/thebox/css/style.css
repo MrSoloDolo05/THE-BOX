@@ -2020,6 +2020,17 @@ a:focus-visible,
     cursor: default;
 }
 
+/* An open section menu drops below the card, so the card must stop
+   clipping while that menu is open. Scoped to the open state on
+   purpose: the rounded-corner clipping of the card background is
+   only wanted while the menu is closed. `overflow: hidden` here was
+   silently cutting off the last menu items (DELETE sits entirely
+   below the card boundary). A z-index cannot escape an ancestor
+   clip, so the clip itself has to be lifted while the menu is out. */
+.song-section:has(.section-kebab.open) {
+    overflow: visible;
+}
+
 .song-section:focus-visible {
     outline: 2px solid rgba(240,238,233,.55);
     outline-offset: 2px;

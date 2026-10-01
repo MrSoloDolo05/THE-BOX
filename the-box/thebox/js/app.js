@@ -1996,7 +1996,19 @@ function setupRedRoom() {
 
         title.addEventListener(
             "blur",
-            () => {
+            event => {
+
+                /* Title -> section card (or back) is one continuous
+                   editing session: do not reconcile in the middle of
+                   the handoff. */
+                if (
+                    typeof isRedRoomEditorTarget === "function" &&
+                    isRedRoomEditorTarget(
+                        event.relatedTarget
+                    )
+                ) {
+                    return;
+                }
 
                 if (typeof endLiveEdit === "function") {
                     endLiveEdit();
@@ -2241,14 +2253,53 @@ function setupRedRoom() {
                 const next =
                     event.relatedTarget;
 
-                /* Moving between two section editors is still live
-                   editing; only leaving the container ends it. */
-                if (
-                    next &&
-                    next.closest &&
-                    next.closest(".section-editor, .section-name") &&
-                    sectionsContainer.contains(next)
-                ) {
+                /* Continuous editing: focus moved from one section
+                   editor into another, or into the song title.
+                   Ending live edit inside that handoff would rebuild
+                   every card in the gap between the blur and the next
+                   focus event, which is exactly the unsafe window
+                   that swallowed keystrokes and moved the caret. */
+                const movesIntoEditor =
+                    typeof isRedRoomEditorTarget === "function"
+                        ? isRedRoomEditorTarget(next)
+                        : Boolean(
+                            next &&
+                            next.closest &&
+                            next.closest(
+                                ".section-editor, .section-name"
+                            ) &&
+                            sectionsContainer.contains(next)
+                        );
+
+                if (movesIntoEditor) {
+                    return;
+                }
+
+                /* Taps and programmatic focus moves report no
+                   relatedTarget. Wait one task so document.activeElement
+                   has settled, then decide: if the writer landed in
+                   another editor, editing simply continued. */
+                if (!next) {
+
+                    setTimeout(
+                        () => {
+
+                            if (
+                                typeof isRedRoomEditorFocused ===
+                                "function" &&
+                                isRedRoomEditorFocused()
+                            ) {
+                                return;
+                            }
+
+                            if (
+                                typeof endLiveEdit === "function"
+                            ) {
+                                endLiveEdit();
+                            }
+                        },
+                        0
+                    );
 
                     return;
                 }
@@ -2455,9 +2506,13 @@ function setupRedRoom() {
 
         delegateClick(
             sectionsContainer,
-            '[data-action="open-picker"]',
+            '[data-action="open-liner-picker"]',
             (event, el) => {
-
+                /* Close first: the picker is a modal that sits over
+                   the card, so a menu left open behind it would
+                   reappear once the modal closes. */
+                event.stopPropagation();
+                closeOpenSectionMenus();
                 openLinerPickerForSection(
                     el.closest(".song-section")
                         .dataset.sectionId

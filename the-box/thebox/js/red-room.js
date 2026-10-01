@@ -31,6 +31,16 @@ function beginLiveEdit() {
     }
 }
 
+/* Blur and focus are two separate events, and a card-to-card handoff
+   has a task-sized gap between them. Reconciling inside the blur
+   handler rebuilds the whole card list in exactly that gap: the card
+   being focused into is replaced before the caret lands in it, which
+   both swallowed keystrokes and threw the caret away. Deferring one
+   task lets the browser settle the new focus first; if the writer is
+   still editing, protection simply continues and the reconciliation
+   waits for the real end of the session. */
+let liveEditReconcileTimer = null;
+
 function endLiveEdit() {
 
     if (typeof flushLyricsSave === "function") {
@@ -45,34 +55,307 @@ function endLiveEdit() {
         setLiveEdit(false);
     }
 
-    if (typeof consumeRenderDeferred === "function") {
-        const deferred =
-            consumeRenderDeferred();
-
-        if (
-            deferred &&
-            typeof renderRedRoomSafe === "function"
-        ) {
-
-            renderRedRoomSafe();
-        }
+    if (typeof consumeRenderDeferred !== "function") {
+        return;
     }
+
+    if (!consumeRenderDeferred()) {
+        return;
+    }
+
+    if (liveEditReconcileTimer) {
+        clearTimeout(liveEditReconcileTimer);
+    }
+
+    liveEditReconcileTimer =
+        setTimeout(
+            () => {
+
+                liveEditReconcileTimer = null;
+
+                const stillEditing =
+
+                    (typeof isLiveEdit === "function" &&
+                        isLiveEdit()) ||
+
+                    (typeof isRedRoomUiFocused === "function" &&
+                        isRedRoomUiFocused()) ||
+
+                    (typeof isRedRoomEditorFocused === "function" &&
+                        isRedRoomEditorFocused());
+
+                if (stillEditing) {
+
+                    /* Editing continued into another card: keep the
+                       reconciliation pending so nothing repaints until
+                       the writer really leaves the editor. */
+                    if (typeof markRenderDeferred === "function") {
+                        markRenderDeferred();
+                    }
+
+                    return;
+                }
+
+                if (
+                    typeof renderRedRoomSafe === "function"
+                ) {
+                    renderRedRoomSafe();
+                }
+            },
+            0
+        );
 }
 
 function isRedRoomEditorFocused() {
 
+    return isRedRoomEditorTarget(document.activeElement);
+}
+
+
+/* True while focus sits anywhere inside the RED ROOM editor, including
+   the controls attached to a card (kebab, delete, liner picker). A
+   click on one of those starts with focus leaving the textarea, so a
+   reconciliation that rebuilds the card list in that instant removes
+   the button the pointer is still over and the click never lands. */
+function isRedRoomUiFocused() {
+
     const active =
         document.activeElement;
 
-    if (!active) {
+    if (!active || !active.closest) {
         return false;
     }
 
     return Boolean(
-        active.closest &&
         active.closest("#song-sections, #song-title")
     );
 }
+
+/* True for the text inputs of the Red Room: a section editor, a
+   section label, or the song title. Deliberately NOT "anything inside
+   #song-sections" - a focused kebab or delete button must not keep
+   render protection held open, or remote changes would never paint. */
+function isRedRoomEditorTarget(node) {
+
+    return Boolean(
+        node &&
+        node.closest &&
+        node.closest(
+            ".section-editor, .section-name, #song-title"
+        )
+    );
+}
+
+/* =========================================================
+   LOCAL EDIT LEDGER  (P0 data-integrity guard)
+   ---------------------------------------------------------
+   The sync layer works in snapshots: a push captures the state,
+   awaits a Firestore transaction, then adopts the merged result.
+   Anything typed during that network round trip is NOT inside the
+   snapshot, so adopting it wholesale used to roll state back to the
+   older text. The focused editor still looked correct, and the next
+   reconciliation painted the older text over it: typed characters
+   appeared to vanish when the writer moved to another card.
+
+   The ledger records every locally typed lyric/title value the moment
+   the keystroke happens and keeps it until a merge/push has actually
+   confirmed it. Any adoption therefore re-applies the newest local
+   text before it can reach the screen, and any card refresh skips
+   protected sections. The newest local text is authoritative until
+   persisted.
+   ========================================================= */
+
+const localLyricEdits = new Map();
+let localTitleEdit = null;
+
+function recordLocalLyricEdit(songId, sectionId, value) {
+
+    if (!songId || !sectionId) {
+        return;
+    }
+
+    localLyricEdits.set(sectionId, {
+        songId,
+        value,
+        stamp: Date.now()
+    });
+}
+
+function recordLocalTitleEdit(songId, value) {
+
+    if (!songId) {
+        return;
+    }
+
+    localTitleEdit = {
+        songId,
+        value,
+        stamp: Date.now()
+    };
+}
+
+function hasLocalLyricEdit(sectionId) {
+    return localLyricEdits.has(sectionId);
+}
+
+/* Re-assert protected local text over a state object that has just
+   been (possibly stale-)replaced. Returns true when anything was
+   restored, so the caller can persist and push the recovered text. */
+function applyLocalEditsToState() {
+
+    let restored = false;
+
+    localLyricEdits.forEach((edit, sectionId) => {
+
+        const song =
+            (state.songs || []).find(
+                item => item.id === edit.songId
+            );
+
+        if (!song || !Array.isArray(song.sections)) {
+            return;
+        }
+
+        const section =
+            song.sections.find(
+                item => item.id === sectionId
+            );
+
+        if (!section) {
+            return;
+        }
+
+        if ((section.lyrics || "") !== edit.value) {
+            section.lyrics = edit.value;
+            restored = true;
+        }
+    });
+
+    if (localTitleEdit) {
+
+        const song =
+            (state.songs || []).find(
+                item => item.id === localTitleEdit.songId
+            );
+
+        if (song && (song.title || "") !== localTitleEdit.value) {
+            song.title = localTitleEdit.value;
+            restored = true;
+        }
+    }
+
+    if (restored && typeof touchSong === "function") {
+
+        const touched = new Set();
+
+        localLyricEdits.forEach(edit => touched.add(edit.songId));
+
+        if (localTitleEdit) {
+            touched.add(localTitleEdit.songId);
+        }
+
+        touched.forEach(songId => {
+
+            const song =
+                (state.songs || []).find(
+                    item => item.id === songId
+                );
+
+            if (song) {
+                touchSong(song);
+            }
+        });
+    }
+
+    return restored;
+}
+
+/* A local edit stops being special once the confirmed (merged/pushed)
+   state already carries exactly the text the writer typed, and no
+   debounced save is still pending. Deleting a song or section also
+   drops its entries so the ledger can never grow or resurrect data. */
+function pruneLocalEdits(confirmed) {
+
+    const snapshot =
+        confirmed || (typeof state !== "undefined" ? state : null);
+
+    if (!snapshot) {
+        return;
+    }
+
+    const pendingPersist =
+        Boolean(lyricsSaveTimer || titleSaveTimer);
+
+    localLyricEdits.forEach((edit, sectionId) => {
+
+        const song =
+            (snapshot.songs || []).find(
+                item => item.id === edit.songId
+            );
+
+        const section =
+            song && Array.isArray(song.sections)
+                ? song.sections.find(
+                    item => item.id === sectionId
+                )
+                : null;
+
+        if (!section) {
+            localLyricEdits.delete(sectionId);
+            return;
+        }
+
+        if (
+            !pendingPersist &&
+            (section.lyrics || "") === edit.value
+        ) {
+            localLyricEdits.delete(sectionId);
+        }
+    });
+
+    if (!localTitleEdit) {
+        return;
+    }
+
+    const titleSong =
+        (snapshot.songs || []).find(
+            item => item.id === localTitleEdit.songId
+        );
+
+    if (!titleSong) {
+        localTitleEdit = null;
+        return;
+    }
+
+    if (
+        !pendingPersist &&
+        (titleSong.title || "") === localTitleEdit.value
+    ) {
+        localTitleEdit = null;
+    }
+}
+
+/* An intentional removal of a whole song must also remove its pending
+   entries, so a copy of the song that is still travelling through the
+   sync layer cannot bring back text the writer already threw away. */
+function dropLocalEditsForSong(songId) {
+
+    if (!songId) {
+        return;
+    }
+
+    localLyricEdits.forEach((edit, sectionId) => {
+
+        if (edit.songId === songId) {
+            localLyricEdits.delete(sectionId);
+        }
+    });
+
+    if (localTitleEdit && localTitleEdit.songId === songId) {
+        localTitleEdit = null;
+    }
+}
+
 
 /* The id of the song the Red Room DOM currently reflects. Opening a
    different song must always rebuild, even when a stale focus is
@@ -108,6 +391,12 @@ function renderRedRoomSafe(force) {
     }
 
     renderRedRoomContent(force);
+
+    /* The screen and the state now agree, so local edits that this
+       render proves are already carried by the state can leave the
+       ledger. Entries for sections that no longer exist are dropped
+       too, so the ledger can never resurrect deleted content. */
+    pruneLocalEdits();
 }
 
 
@@ -401,6 +690,15 @@ function renderSections(force) {
 
                                             <button
                                                 type="button"
+                                                data-action="open-liner-picker"
+                                                role="menuitem"
+                                                title="Insert one liner"
+                                            >
+                                                + LINE
+                                            </button>
+
+                                            <button
+                                                type="button"
                                                 class="danger"
                                                 data-action="delete-section"
                                                 role="menuitem"
@@ -493,10 +791,13 @@ function refreshSectionCard(sectionId) {
         );
 
     /* Never overwrite the label input while it has focus: state
-       already holds the in-progress keystrokes. */
+       already holds the in-progress keystrokes. Sections with a
+       pending local edit are also left alone even when unfocused —
+       their DOM text is the newest word of the writer. */
     if (
         nameInput &&
-        document.activeElement !== nameInput
+        document.activeElement !== nameInput &&
+        !hasLocalLyricEdit(sectionId)
     ) {
 
         const next =
@@ -516,10 +817,15 @@ function refreshSectionCard(sectionId) {
         );
 
     /* Never overwrite the focused textarea. State already holds
-       the local keystrokes; remote text applies on blur render. */
+       the local keystrokes; remote text applies on blur render.
+       A section with a pending local edit is protected the same way
+       even after focus has moved to another card, otherwise a merge
+       that has not yet absorbed those keystrokes would paint older
+       text over them. */
     if (
         editor &&
-        document.activeElement !== editor
+        document.activeElement !== editor &&
+        !hasLocalLyricEdit(sectionId)
     ) {
 
         const next =
@@ -633,6 +939,17 @@ function updateSectionLyrics(
         value;
 
 
+    /* Protect this text from the moment the keystroke happens: any
+       state adoption that lands before it has been persisted and
+       pushed (including one whose snapshot predates this keystroke)
+       re-applies it instead of silently rolling it back. */
+    recordLocalLyricEdit(
+        song.id,
+        sectionId,
+        value
+    );
+
+
     beginLiveEdit();
 
     currentSectionId =
@@ -661,12 +978,21 @@ function updateSectionLyrics(
 
 function flushLyricsSave() {
 
-    if (lyricsSaveTimer) {
+    const hadTimer =
+        Boolean(lyricsSaveTimer);
+
+    if (hadTimer) {
 
         clearTimeout(lyricsSaveTimer);
 
         lyricsSaveTimer = null;
+    }
 
+    /* Persist even when the debounce already fired but the ledger
+       still holds text that has not been confirmed by a merge/push:
+       that text must reach localStorage before anything else can
+       replace state. */
+    if (hadTimer || localLyricEdits.size) {
         saveState();
     }
 }
@@ -749,6 +1075,10 @@ function flushRedRoomEdits() {
 }
 
 function structuralRender() {
+
+    /* Structural actions rebuild every card, so any in-progress text
+       must be in the state before the markup is regenerated. */
+    flushRedRoomEdits();
 
     if (typeof consumeRenderDeferred === "function") {
         consumeRenderDeferred();
@@ -1007,6 +1337,12 @@ function deleteSection(id) {
 
     const section =
         song.sections[index];
+
+
+    /* An intentional delete outranks the typing guard: forget the
+       protected text for this section so a snapshot that still holds
+       it cannot bring it back. */
+    localLyricEdits.delete(id);
 
 
     song.sections.splice(
@@ -1689,6 +2025,13 @@ function updateSongTitle() {
     song.title =
         input.value;
 
+    /* Same protection as lyrics: the newest typed title outranks any
+       adoption that has not confirmed it yet. */
+    recordLocalTitleEdit(
+        song.id,
+        input.value
+    );
+
 
     touchSong(song);
 
@@ -1709,12 +2052,17 @@ function updateSongTitle() {
 
 function flushTitleSave() {
 
-    if (titleSaveTimer) {
+    const hadTimer =
+        Boolean(titleSaveTimer);
+
+    if (hadTimer) {
 
         clearTimeout(titleSaveTimer);
 
         titleSaveTimer = null;
+    }
 
+    if (hadTimer || localTitleEdit) {
         saveState();
     }
 }
@@ -2198,6 +2546,13 @@ function leaveSong() {
     flushLyricsSave();
     flushTitleSave();
 
+    /* Leaving the editor ends the protected session even when the
+       browser never delivered a focusout (touch, or a click on a
+       non-focusable control). */
+    if (typeof endLiveEdit === "function") {
+        endLiveEdit();
+    }
+
     hideSectionUndo();
 
     currentSongId = null;
@@ -2222,3 +2577,36 @@ function leaveSong() {
 renderRedRoom = function () {
     renderRedRoomSafe();
 };
+
+
+/* =========================================================
+   PERSISTENCE SAFETY NET
+   A reload or tab switch inside the save debounce window used to
+   drop the last few characters typed. Flushing on pagehide and on
+   hidden means the newest text is in localStorage - and queued for
+   the cloud - before the document can be torn away.
+   ========================================================= */
+
+window.addEventListener(
+    "pagehide",
+    () => {
+
+        if (typeof flushRedRoomEdits === "function") {
+            flushRedRoomEdits();
+        }
+    }
+);
+
+window.addEventListener(
+    "visibilitychange",
+    () => {
+
+        if (
+            document.visibilityState === "hidden" &&
+            typeof flushRedRoomEdits === "function"
+        ) {
+            flushRedRoomEdits();
+        }
+    }
+);
+

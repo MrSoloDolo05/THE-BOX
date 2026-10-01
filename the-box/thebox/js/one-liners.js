@@ -484,6 +484,39 @@ function renderLiners() {
             : "verse-text";
 
 
+    /* A re-render replaces every .liner-kebab-btn node, which silently
+       closes an open menu and throws away the button the pointer and the
+       caret are on. Sync reconciliation can land at any moment, so the
+       open menu and its focus are captured here and restored after the
+       rebuild. Both are no-ops when no menu is open, so an ordinary
+       render is unaffected. */
+    const openKebab =
+        container.querySelector(
+            ".liner-kebab.open"
+        );
+
+    const openItemId =
+        openKebab
+            ?.closest(".liner")
+            ?.dataset.itemId || null;
+
+    const activeElementNow =
+        document.activeElement;
+
+    const focusedKebabBtn =
+        activeElementNow &&
+        activeElementNow.classList &&
+        activeElementNow.classList.contains(
+            "liner-kebab-btn"
+        )
+            ? activeElementNow
+            : null;
+
+    const focusedItemId =
+        focusedKebabBtn
+            ?.closest(".liner")
+            ?.dataset.itemId || null;
+
     const sortedItems =
         [...items].reverse();
 
@@ -642,6 +675,49 @@ function renderLiners() {
                 `;
             })
             .join("");
+
+    /* Re-open the menu that was open before this render, and put the
+       caret back on its button. Only the open menu and the focused
+       kebab are restored: nothing else about the re-render changes. */
+    if (openItemId) {
+
+        const restoredKebab =
+            container.querySelector(
+                `.liner[data-item-id="${openItemId}"] .liner-kebab`
+            );
+
+        if (restoredKebab) {
+
+            restoredKebab.classList.add(
+                "open"
+            );
+
+            restoredKebab
+                .querySelector(
+                    ".liner-kebab-btn"
+                )
+                ?.setAttribute(
+                    "aria-expanded",
+                    "true"
+                );
+        }
+    }
+
+    if (focusedItemId) {
+
+        const buttonToFocus =
+            container.querySelector(
+                `.liner[data-item-id="${focusedItemId}"] .liner-kebab-btn`
+            );
+
+        if (buttonToFocus &&
+            document.activeElement !== buttonToFocus) {
+
+            buttonToFocus.focus({
+                preventScroll: true
+            });
+        }
+    }
 }
 
 

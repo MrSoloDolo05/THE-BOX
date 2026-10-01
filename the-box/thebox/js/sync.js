@@ -184,6 +184,32 @@ function getUserDocRef() {
 let pushInFlight = null;
 let pushPending = false;
 
+/* Follow-up pushes exist to catch edits made while a transaction was
+   open. They are a safety net, not the main path, so they are capped:
+   a merge that never converges would otherwise re-push forever, once
+   per round trip, burning Firestore quota and re-rendering the UI
+   roughly every second. Capping the re-push cannot lose data because
+   the transaction has already committed its merged state before any
+   follow-up is considered. The counter resets whenever a push finds
+   the cloud already matches local, so a genuine edit after a
+   non-converging push still gets its own follow-up. */
+const followUpPushGuard = {
+    limit: 2,
+    count: 0,
+
+    reachedLimit() {
+        return this.count >= this.limit;
+    },
+
+    note() {
+        this.count += 1;
+    },
+
+    reset() {
+        this.count = 0;
+    }
+};
+
 
 async function pushState() {
     if (!isSignedIn()) return;
@@ -311,7 +337,35 @@ async function runPushTransaction(docRef) {
         stateDigest(reconciledState) !==
         stateDigest(mergedState)
     ) {
-        pushState();
+        /* A follow-up push is a safety net for edits made while the
+           transaction was open, so ONE more is always safe. If the
+           next push still finds a difference, the merge is not
+           converging (a record whose digest it rewrites every
+           time); pushing again would repeat forever and burn
+           Firestore quota. Stop there and let the next genuine
+           edit schedule a fresh push. Only the re-push is capped:
+           this transaction has already committed its merge, so no
+           data is left unsaved. */
+        if (
+            !followUpPushGuard.reachedLimit()
+        ) {
+
+            followUpPushGuard.note();
+            pushState();
+        } else {
+
+            console.warn(
+                "Sync: merge did not converge; skipping the extra push.",
+                {
+                    followUps:
+                        followUpPushGuard.count
+                }
+            );
+        }
+    } else {
+
+        /* The committed document already matches local: converged. */
+        followUpPushGuard.reset();
     }
 }
 

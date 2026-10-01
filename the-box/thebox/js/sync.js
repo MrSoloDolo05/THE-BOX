@@ -275,17 +275,44 @@ async function runPushTransaction(docRef) {
         );
     });
 
-    /* Adopt exactly what the cloud now holds so that every device
-       converges on the same document. The focused Red Room editor
-       is never rebuilt by this: adoptMergedState() defers the UI
-       reconciliation while live editing. */
-    adoptMergedState(mergedState);
-
+    /* The cloud now holds exactly mergedState, so echo suppression
+       and the merge baseline must describe THAT document. */
     rememberSyncedSignature(mergedState);
 
     setSyncBaseline(
         buildSyncBaseline(mergedState)
     );
+
+    /* Reconcile against the LIVE state before adopting anything.
+       localSnapshot was taken before the round trip, so a keystroke
+       or structural edit made while this transaction was open is
+       newer than what was committed. Merging the live state against
+       the baseline that describes what the cloud held BEFORE this
+       push makes those newer local records win, so adoption can never
+       roll back what the writer just typed, and records another device
+       changed in the meantime still arrive. */
+    const reconciledState =
+        mergeSyncState(
+            captureSyncState(state),
+            mergedState,
+            baseline
+        );
+
+    /* Adopt exactly what the cloud now holds so that every device
+       converges on the same document. The focused Red Room editor
+       is never rebuilt by this: adoptMergedState() defers the UI
+       reconciliation while live editing. */
+    adoptMergedState(reconciledState);
+
+    /* When the newer local records are not yet in the committed
+       document, push again so the cloud catches up. pushState() is
+       serialised, so this only queues one follow-up transaction. */
+    if (
+        stateDigest(reconciledState) !==
+        stateDigest(mergedState)
+    ) {
+        pushState();
+    }
 }
 
 async function pullState() {
@@ -1223,54 +1250,73 @@ function adoptMergedState(merged) {
         Number(merged.revision || 0)
     );
 
-    saveState({ silent: true });
+    /* Newest local text outranks this snapshot. A push captures the
+       state, awaits the Firestore round trip, then adopts the merged
+       result: anything typed during that window is not inside the
+       snapshot it was built from. Re-applying the ledger here keeps
+       the writer's newest word authoritative until it is confirmed,
+       and makes the silent save below persist the recovered text. */
+    const recoveredLocalText =
+        typeof applyLocalEditsToState === "function" &&
+        applyLocalEditsToState();
 
-    if (
-        typeof isLiveEdit === "function" &&
-        isLiveEdit()
-    ) {
+    if (recoveredLocalText) {
 
-        /* The user is typing in the Red Room: defer the UI
-           reconciliation so the focused textarea is never torn
-           down mid-edit. */
+        /* The merged snapshot we received was older than what the
+           writer has typed. Persist normally (not silently) so this
+           recovered text is also pushed back and every device
+           converges on it. */
+        saveState();
+
+    } else {
+
+        saveState({ silent: true });
+    }
+
+    const editingInProgress =
+
+        (typeof isLiveEdit === "function" &&
+            isLiveEdit()) ||
+
+        (typeof isRedRoomUiFocused === "function" &&
+            isRedRoomUiFocused()) ||
+
+        (typeof isRedRoomEditorFocused === "function" &&
+            isRedRoomEditorFocused());
+
+    if (editingInProgress) {
+
+        /* The writer is in the Red Room (or has been typing in it and
+           has not reconciled yet): rebuild everything EXCEPT the
+           editor. The Red Room reconciles on blur via the deferred
+           flag, so a textarea is never torn down mid-keystroke and an
+           unfocused card is never repainted from a snapshot that is
+           older than what the writer just typed. */
+        if (typeof renderCrate === "function") {
+            renderCrate();
+        }
+
+        if (typeof renderFolderSongsIfNeeded === "function") {
+            renderFolderSongsIfNeeded();
+        }
+
+        if (typeof renderLiners === "function") {
+            renderLiners();
+        }
+
+        if (typeof renderTrash === "function") {
+            renderTrash();
+        }
+
+        if (typeof renderSearchResults === "function") {
+            renderSearchResults(window.searchResults || []);
+        }
+
         markRenderDeferred();
 
     } else if (typeof renderAll === "function") {
 
-        /* renderAll() rebuilds the Red Room editors. While the
-           writer is focused, re-render everything EXCEPT the Red
-           Room; it reconciles on blur via the deferred flag. */
-        if (
-            typeof isLiveEdit === "function" &&
-            isLiveEdit() &&
-            typeof isRedRoomEditorFocused === "function" &&
-            isRedRoomEditorFocused()
-        ) {
-
-            if (typeof renderCrate === "function") {
-                renderCrate();
-            }
-
-            if (typeof renderFolderSongsIfNeeded === "function") {
-                renderFolderSongsIfNeeded();
-            }
-
-            if (typeof renderLiners === "function") {
-                renderLiners();
-            }
-
-            if (typeof renderTrash === "function") {
-                renderTrash();
-            }
-
-            if (typeof renderSearchResults === "function") {
-                renderSearchResults(window.searchResults || []);
-            }
-
-            markRenderDeferred();
-        } else {
-            renderAll();
-        }
+        renderAll();
     }
 }
 

@@ -715,6 +715,11 @@ function deleteSong(id) {
        holds an older copy from resurrecting this song. */
     markRecordDeleted(id);
 
+    /* Forget any text that was still being typed into this song. */
+    if (typeof dropLocalEditsForSong === "function") {
+        dropLocalEditsForSong(id);
+    }
+
 
     state.songs =
         state.songs.filter(
@@ -1562,15 +1567,42 @@ function restoreTrash(id) {
 
 function permanentlyDelete(id) {
 
+    const doomed =
+        state.trash.find(
+            item =>
+                item.id === id
+        );
+
     state.trash =
         state.trash.filter(
             item =>
                 item.id !== id
         );
 
+    /* A song destroyed for good must not leave protected text behind
+       that an older copy still in flight could restore. */
+    forgetLocalEditsFor(doomed);
+
     saveState();
 
     renderTrash();
+}
+
+
+/* Drop any pending Red Room typing protection that belongs to a trash
+   record being destroyed. */
+function forgetLocalEditsFor(item) {
+
+    if (
+        !item ||
+        typeof dropLocalEditsForSong !== "function"
+    ) {
+        return;
+    }
+
+    if (item.type === "song" && item.data && item.data.id) {
+        dropLocalEditsForSong(item.data.id);
+    }
 }
 
 
@@ -1583,6 +1615,8 @@ function emptyTrash() {
     if (!state.trash.length) {
         return;
     }
+
+    state.trash.forEach(forgetLocalEditsFor);
 
     state.trash = [];
 

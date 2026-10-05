@@ -162,7 +162,14 @@ function createDefaultState() {
         /* Per-record deletion tombstones: id -> ISO timestamp.
            The single source of truth for "this record is deleted",
            and it survives trash being emptied. */
-        deletedRecordIds: {}
+        deletedRecordIds: {},
+
+        /* Permanent deletions: id -> ISO timestamp. A purge is
+           TERMINAL: the record was deleted forever and must never
+           be rebuilt as a trash row nor resurrected as a live
+           record. The merge only ever ADDS purge markers, so a stale
+           device can never undo one. */
+        purgedRecordIds: {}
     };
 }
 
@@ -284,6 +291,15 @@ function loadState() {
                 parsed.deletedRecordIds &&
                 typeof parsed.deletedRecordIds === "object"
                     ? parsed.deletedRecordIds
+                    : {},
+
+            /* Absent in every document written before purges
+               existed; starts empty, so nothing counts as
+               permanently deleted until the user does it. */
+            purgedRecordIds:
+                parsed.purgedRecordIds &&
+                typeof parsed.purgedRecordIds === "object"
+                    ? parsed.purgedRecordIds
                     : {}
         };
 
@@ -801,6 +817,41 @@ function unmarkRecordDeleted(recordId) {
     setDeletedRecordIds(ids);
 }
 
+
+/* ---------------------------------------------------------
+   PERMANENT DELETION (purge)
+
+   A purge is TERMINAL and is additive only. It records "this
+   record was deleted forever" WITHOUT removing the tombstone,
+   which is what makes it durable: the merge can only add purge
+   markers, so a device that never saw the purge, or that still
+   holds a stale live copy, cannot resurrect the record or
+   rebuild its trash row.
+--------------------------------------------------------- */
+
+function isPurged(recordId) {
+    const ids = state.purgedRecordIds || {};
+    return recordId in ids;
+}
+
+function getPurgedRecordIds() {
+    return state.purgedRecordIds || {};
+}
+
+function purgeRecord(recordId) {
+
+    if (!recordId || isPurged(recordId)) {
+        return;
+    }
+
+    /* The tombstone is deliberately left in place. A purge adds a
+       meaning to that tombstone; it does not erase it. */
+    markRecordDeleted(recordId);
+
+    state.purgedRecordIds[recordId] =
+        deletionStampFor(recordId);
+}
+
 function touchRecord(record) {
     if (record) {
         record.modified = new Date().toISOString();
@@ -975,6 +1026,11 @@ function buildSyncBaseline(snapshot) {
         source.deletedRecordIds || {}
     );
 
+    baseline.purgedRecordIds = Object.assign(
+        {},
+        source.purgedRecordIds || {}
+    );
+
     return baseline;
 }
 
@@ -1072,6 +1128,11 @@ function captureSyncState(source) {
     snapshot.deletedRecordIds = Object.assign(
         {},
         from.deletedRecordIds || {}
+    );
+
+    snapshot.purgedRecordIds = Object.assign(
+        {},
+        from.purgedRecordIds || {}
     );
 
     snapshot.updatedAt = from.updatedAt || "";

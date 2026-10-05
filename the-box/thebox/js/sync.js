@@ -557,6 +557,28 @@ function stateDigest(snapshot) {
         hash = mergeHashText(id, hash);
     });
 
+    /* Purge markers are hashed with their VALUES, not just their
+       keys: two devices holding the same purge set with different
+       timestamps have NOT converged, and key-only hashing would
+       report them as equal and re-open the push loop. The "P<n>"
+       length prefix keeps purge entries from colliding with
+       tombstone entries in the hash stream. */
+    const purgeIds =
+        Object.keys(snapshot.purgedRecordIds || {}).sort();
+
+    hash = mergeHashText(
+        "P" + purgeIds.length,
+        hash
+    );
+
+    purgeIds.forEach(id => {
+
+        hash = mergeHashText(
+            id + "=" + snapshot.purgedRecordIds[id],
+            hash
+        );
+    });
+
     return hash.toString(16);
 }
 
@@ -868,6 +890,53 @@ function collectTombstones(local, cloud, base) {
     return tombstones;
 }
 
+/* ---------------------------------------------------------
+   PURGE MARKERS
+
+   A purge means "this record was deleted permanently". It is
+   TERMINAL and additive: the marker is taken as a plain UNION of
+   every trusted source (local, cloud and baseline) and is never
+   timestamp-ordered against anything.
+
+   That is deliberately stronger than a last-writer-wins merge. A
+   purge must hold even when a record was edited afterwards, or when
+   the restoring device has a newer clock, so no timestamp
+   comparison may ever overturn it. Because markers are only ever
+   added and never removed, a device that never saw the purge cannot
+   erase it by syncing.
+--------------------------------------------------------- */
+
+function collectPurges(local, cloud, base) {
+
+    const purged = {};
+
+    const add = source => {
+
+        const map = safeMap(source && source.purgedRecordIds);
+
+        Object.keys(map).forEach(id => {
+            purged[id] = map[id];
+        });
+    };
+
+    add(local);
+    add(cloud);
+    add(base);
+
+    return purged;
+}
+
+function safeMap(value) {
+
+    return (
+        value &&
+        typeof value === "object"
+    )
+        ? value
+        : {};
+}
+
+
 function deletionStamp(entry) {
 
     if (!entry) {
@@ -974,11 +1043,29 @@ function mergeSyncState(localRaw, cloudRaw, baseline) {
     const tombstones =
         collectTombstones(local, cloud, baseline);
 
+    /* Terminal purges, unioned from every trusted source. */
+    const purges =
+        collectPurges(local, cloud, baseline);
+
     const removed = {};
 
     SYNC_LIVE_COLLECTIONS.forEach(collection => {
 
         merged[collection] = merged[collection].filter(record => {
+
+            /* A purge outranks every other signal. Even when no
+               tombstone survives, a purged record is forced to
+               stay deleted, so a stale live copy can never
+               resurrect it. */
+            if (purges[record.id]) {
+
+                removed[record.id] = {
+                    collection: collection,
+                    record: record
+                };
+
+                return false;
+            }
 
             if (!tombstones[record.id]) {
                 return true;
@@ -999,8 +1086,11 @@ function mergeSyncState(localRaw, cloudRaw, baseline) {
         local.trash,
         cloud.trash,
         tombstones,
-        removed
+        removed,
+        purges
     );
+
+    merged.purgedRecordIds = purges;
 
     merged.deletedRecordIds =
         Object.assign({}, tombstones);
@@ -1030,8 +1120,11 @@ function mergeTrash(
     localTrash,
     cloudTrash,
     tombstones,
-    removed
+    removed,
+    purges
 ) {
+
+    const purged = safeMap(purges);
 
     const localMap = trashMap(localTrash);
     const cloudMap = trashMap(cloudTrash);
@@ -1072,6 +1165,12 @@ function mergeTrash(
     const output = [];
 
     Object.keys(tombstones).forEach(id => {
+
+        /* A permanently deleted record must never get a trash row,
+           no matter what any tombstone or live copy says. */
+        if (purged[id]) {
+            return;
+        }
 
         let entry = byId.get(id);
 
@@ -1176,6 +1275,16 @@ function finalizeMergedState(merged) {
         typeof merged.deletedRecordIds !== "object"
     ) {
         merged.deletedRecordIds = {};
+    }
+
+    /* Purge markers are never pruned here, not even when a matching
+       tombstone is missing: the marker alone is what stops a stale
+       device from resurrecting the record. */
+    if (
+        !merged.purgedRecordIds ||
+        typeof merged.purgedRecordIds !== "object"
+    ) {
+        merged.purgedRecordIds = {};
     }
 
     /* At least one folder must always exist. */
@@ -1290,6 +1399,12 @@ function adoptMergedState(merged) {
         Object.assign(
             {},
             merged.deletedRecordIds || {}
+        );
+
+    state.purgedRecordIds =
+        Object.assign(
+            {},
+            merged.purgedRecordIds || {}
         );
 
     /* Take the merged timestamp as-is. Deliberately NOT "now": a

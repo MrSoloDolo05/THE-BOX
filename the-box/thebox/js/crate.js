@@ -1339,6 +1339,32 @@ function renderTrash() {
    RESTORE TRASH
 ========================================================= */
 
+/* A purge is terminal. A device that still shows this row is simply
+   stale: the merge will discard the restore, so say so rather than
+   letting the user believe it worked. The merge stays
+   authoritative either way. */
+let purgeNoticeTimer = null;
+
+function notifyPurgeConflict() {
+
+    const status =
+        document.getElementById("save-status");
+
+    if (!status) {
+        return;
+    }
+
+    status.textContent =
+        "PERMANENTLY DELETED ON ANOTHER DEVICE";
+
+    clearTimeout(purgeNoticeTimer);
+
+    purgeNoticeTimer = setTimeout(() => {
+        status.textContent = "SAVED";
+    }, 4000);
+}
+
+
 function restoreTrash(id) {
 
     const item =
@@ -1348,6 +1374,17 @@ function restoreTrash(id) {
         );
 
     if (!item) {
+        return;
+    }
+
+    if (
+        item.data &&
+        item.data.id &&
+        typeof isPurged === "function" &&
+        isPurged(item.data.id)
+    ) {
+
+        notifyPurgeConflict();
         return;
     }
 
@@ -1583,11 +1620,12 @@ function permanentlyDelete(id) {
        that an older copy still in flight could restore. */
     forgetLocalEditsFor(doomed);
 
-    /* Same as emptyTrash: the merge rebuilds trash rows from the
-       tombstones, so a row removed without clearing its tombstone
-       reappears on the next push. This is the permanent delete. */
+    /* Permanent deletion adds a terminal purge marker instead of
+       removing the tombstone. The tombstone must survive: it is what
+       stops a stale device from resurrecting the record, and the
+       purge is what stops the merge rebuilding this trash row. */
     if (doomed && doomed.data && doomed.data.id) {
-        unmarkRecordDeleted(
+        purgeRecord(
             doomed.data.id
         );
     }
@@ -1625,16 +1663,16 @@ function emptyTrash() {
         return;
     }
 
-    /* Clearing the list is not enough: the sync merge rebuilds trash
-       rows from deletedRecordIds, so a surviving tombstone would
-       bring every emptied item straight back on the next push.
-       Drop the tombstone too, which is what makes this permanent. */
+    /* Emptying the trash is N independent permanent deletions, so it
+       writes the same terminal purge marker as the single-item
+       path. The marker is written BEFORE the row is dropped so it
+       can never be lost. */
     state.trash.forEach(item => {
 
         forgetLocalEditsFor(item);
 
         if (item && item.data && item.data.id) {
-            unmarkRecordDeleted(
+            purgeRecord(
                 item.data.id
             );
         }

@@ -93,6 +93,12 @@ async function initAuth() {
         return;
     }
 
+    if (window.__TR && typeof window.__TR.record === "function") {
+        window.__TR.record("auth observation started", {
+            authResolved: false,
+            authenticated: false
+        });
+    }
 
     /* The app now requires manual login triggers. On load we
        only observe the Firebase auth state and update the UI;
@@ -103,6 +109,13 @@ async function initAuth() {
             if (user) {
 
                 currentUser = user;
+                if (window.__TR && typeof window.__TR.record === "function") {
+                    window.__TR.record("auth resolved", {
+                        authResolved: true,
+                        authenticated: true,
+                        uidHint: String(user.uid || "").slice(-6)
+                    });
+                }
                 updateAuthButton();
                 setSyncStatus("syncing");
 
@@ -121,6 +134,12 @@ async function initAuth() {
             } else {
 
                 currentUser = null;
+                if (window.__TR && typeof window.__TR.record === "function") {
+                    window.__TR.record("auth resolved", {
+                        authResolved: true,
+                        authenticated: false
+                    });
+                }
                 updateAuthButton();
                 stopListening();
                 setSyncStatus("offline");
@@ -239,6 +258,12 @@ async function pushState() {
         } catch (error) {
 
             console.error("Push failed:", error);
+            if (window.__TR && typeof window.__TR.record === "function") {
+                window.__TR.record("push failed", {
+                    errorCode: error && error.code,
+                    errorMessage: error && error.message
+                });
+            }
 
             setSyncStatus("error");
         }
@@ -405,17 +430,13 @@ async function pullState() {
 
         adoptMergedState(mergedState);
 
-        rememberSyncedSignature(mergedState);
-
-        setSyncBaseline(
-            buildSyncBaseline(mergedState)
-        );
-
         /* The merge may have produced records the cloud has never
            seen (created on this device while offline). Push so the
            other devices receive them. Uses a content digest, not
            the raw JSON, so key ordering can never cause a push
-           storm. */
+           storm. Keep the baseline at the last state known to be in
+           Firestore until that push commits; recording mergedState
+           here would make local-only changes look already synced. */
         if (
             stateDigest(mergedState) !==
             stateDigest(cloudState)
@@ -423,6 +444,12 @@ async function pullState() {
             await pushState();
             return;
         }
+
+        rememberSyncedSignature(cloudState);
+
+        setSyncBaseline(
+            buildSyncBaseline(cloudState)
+        );
 
         setSyncStatus("synced");
 
@@ -1551,22 +1578,24 @@ function startListening() {
                 adoptMergedState(mergedState);
             }
 
-            setSyncBaseline(
-                buildSyncBaseline(mergedState)
-            );
-
-            rememberSyncedSignature(mergedState);
-
             /* Push only when the merge produced something the cloud
                does not have yet (local-only records, or a local edit
-               the cloud has not accepted). The digest comparison
-               makes this idempotent, so the listener can never
-               drive an unbounded push loop. */
+               the cloud has not accepted). Do not advance the
+               baseline or echo signature to a candidate that is not
+               in Firestore yet: another in-flight push must still
+               recognize those local records as unsynced. */
             if (
                 stateDigest(mergedState) !==
                 stateDigest(data.state)
             ) {
                 pushState();
+            } else {
+
+                setSyncBaseline(
+                    buildSyncBaseline(data.state)
+                );
+
+                rememberSyncedSignature(data.state);
             }
 
             setSyncStatus("synced");

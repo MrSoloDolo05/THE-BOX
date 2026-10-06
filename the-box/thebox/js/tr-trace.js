@@ -46,10 +46,247 @@
         muted: false,
         wraps: [],
         missing: [],
-        stopped: false
+        stopped: false,
+        diagnostics: [],
+        trackedSongId: null
     };
 
     window.__TR = TR;
+
+    const DIAGNOSTIC_FIELDS = [
+        "songId",
+        "stateCount",
+        "stateHasSong",
+        "incomingHasSong",
+        "authenticated",
+        "authResolved",
+        "uidHint",
+        "signedIn",
+        "pushInFlight",
+        "pushPending",
+        "errorCode",
+        "errorMessage",
+        "renderedCount",
+        "renderedHasSong",
+        "renderedIds",
+        "view",
+        "scheduledDelayMs",
+        "phase",
+        "type",
+        "sectionsBefore",
+        "sectionsAfter"
+    ];
+
+    function trackedSongStatus() {
+
+        const st = appState();
+        const songs = safe(() => st && st.songs, []);
+        const id = TR.trackedSongId;
+        const rows = safe(
+            () => document.querySelectorAll("#song-list .song-row"),
+            []
+        );
+        const renderedIds = Array.prototype.map.call(
+            rows,
+            row => safe(() => row.dataset.songId, "")
+        ).filter(Boolean);
+
+        return {
+            songId: id,
+            stateCount: Array.isArray(songs) ? songs.length : -1,
+            stateHasSong: Boolean(
+                id &&
+                Array.isArray(songs) &&
+                songs.some(song => song && song.id === id)
+            ),
+            renderedCount: renderedIds.length,
+            renderedHasSong: Boolean(
+                id && renderedIds.indexOf(id) !== -1
+            ),
+            renderedIds: renderedIds.join(",")
+        };
+    }
+
+    function renderDiagnosticPanel() {
+
+        const output = document.getElementById("__tr-sync-log");
+        if (!output) {
+            return;
+        }
+
+        output.textContent = TR.diagnostics.map(entry => {
+            const fields = Object.keys(entry.details)
+                .map(key => key + "=" + String(entry.details[key]))
+                .join(" ");
+            return entry.at + " " + entry.event +
+                (fields ? " | " + fields : "");
+        }).join("\n");
+
+        output.scrollTop = output.scrollHeight;
+    }
+
+    TR.record = function (event, details) {
+
+        const filtered = {};
+        const supplied = details || {};
+
+        DIAGNOSTIC_FIELDS.forEach(key => {
+            if (
+                Object.prototype.hasOwnProperty.call(supplied, key) &&
+                supplied[key] !== undefined &&
+                supplied[key] !== null
+            ) {
+                filtered[key] = supplied[key];
+            }
+        });
+
+        Object.assign(filtered, trackedSongStatus());
+
+        TR.diagnostics.push({
+            at: new Date().toISOString(),
+            event: String(event || "diagnostic"),
+            details: filtered
+        });
+
+        if (TR.diagnostics.length > 500) {
+            TR.diagnostics.shift();
+        }
+
+        log(
+            "SYNC DIAGNOSTIC " + String(event || "diagnostic"),
+            Object.keys(filtered)
+                .map(key => key + "=" + String(filtered[key]))
+                .join(" ")
+        );
+
+        renderDiagnosticPanel();
+    };
+
+    TR.trackSong = function (songId) {
+        TR.trackedSongId = songId || null;
+        TR.record("song added to state", {
+            phase: "immediately after insertion",
+            songId: TR.trackedSongId
+        });
+    };
+
+    function createDiagnosticPanel() {
+
+        if (!document.body || document.getElementById("__tr-sync-panel")) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.textContent = `
+            #__tr-sync-panel {
+                position: fixed;
+                z-index: 10000;
+                right: 8px;
+                bottom: 8px;
+                width: min(620px, calc(100vw - 16px));
+                max-height: 44vh;
+                color: #edf3ee;
+                background: rgba(8, 13, 10, .97);
+                border: 1px solid #86a18a;
+                border-radius: 8px;
+                box-shadow: 0 2px 18px rgba(0, 0, 0, .55);
+                font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+                pointer-events: none;
+            }
+            #__tr-sync-panel button {
+                min-height: 32px;
+                margin: 3px;
+                padding: 4px 9px;
+                color: inherit;
+                background: #1a281d;
+                border: 1px solid #506b55;
+                border-radius: 4px;
+                font: inherit;
+            }
+            #__tr-sync-panel header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 4px;
+                padding: 2px 5px;
+                pointer-events: auto;
+            }
+            #__tr-sync-panel pre {
+                max-height: calc(44vh - 48px);
+                overflow: auto;
+                margin: 0;
+                padding: 6px;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                border-top: 1px solid #506b55;
+                pointer-events: auto;
+            }
+            #__tr-sync-panel.collapsed pre {
+                display: none;
+            }
+        `;
+
+        const panel = document.createElement("section");
+        panel.id = "__tr-sync-panel";
+        panel.className = "collapsed";
+        panel.innerHTML =
+            '<header><strong>Temporary sync trace</strong>' +
+            '<span><button type="button" data-tr-action="copy">COPY</button>' +
+            '<button type="button" data-tr-action="clear">CLEAR</button>' +
+            '<button type="button" data-tr-action="toggle">SHOW</button></span></header>' +
+            '<pre id="__tr-sync-log" aria-live="polite"></pre>';
+
+        panel.addEventListener("click", event => {
+            const button = event.target.closest("[data-tr-action]");
+            if (!button) {
+                return;
+            }
+
+            const action = button.dataset.trAction;
+
+            if (action === "toggle") {
+                panel.classList.toggle("collapsed");
+                button.textContent = panel.classList.contains("collapsed")
+                    ? "SHOW"
+                    : "HIDE";
+            } else if (action === "clear") {
+                TR.diagnostics.length = 0;
+                renderDiagnosticPanel();
+            } else if (action === "copy") {
+                const text = TR.diagnostics.map(entry =>
+                    entry.at + " " + entry.event + " " +
+                    JSON.stringify(entry.details)
+                ).join("\n");
+
+                if (
+                    navigator.clipboard &&
+                    typeof navigator.clipboard.writeText === "function"
+                ) {
+                    navigator.clipboard.writeText(text).catch(error => {
+                        TR.record("diagnostic copy failed", {
+                            errorMessage: String(error.message || error)
+                        });
+                    });
+                }
+            }
+        });
+
+        document.head.appendChild(style);
+        document.body.appendChild(panel);
+    }
+
+    createDiagnosticPanel();
+
+    document.addEventListener("click", event => {
+        const option = event.target.closest(
+            "#section-type-menu [data-section-type]"
+        );
+        if (option) {
+            TR.record("section menu option clicked", {
+                type: option.dataset.sectionType
+            });
+        }
+    }, true);
 
     /* Identity tokens: proves whether two references are the SAME
        object. captureSyncState copies arrays by reference, so an
@@ -356,12 +593,16 @@
                 TR.depth = previousDepth;
             }
 
-            const finish = (value, rejected) => {
+            const finish = (value, rejected, errorObject) => {
 
                 let detail = "";
 
                 if (cfg.exit) {
                     detail = cfg.exit(args, value, rejected);
+                }
+
+                if (rejected && cfg.failure) {
+                    cfg.failure(args, errorObject || rejected);
                 }
 
                 if (detail) {
@@ -382,7 +623,7 @@
             } catch (error) {
                 finish(null, String(
                     error && error.message || error
-                ));
+                ), error);
                 throw error;
             }
 
@@ -395,7 +636,7 @@
                     error => {
                         finish(null, String(
                             error && error.message || error
-                        ));
+                        ), error);
                         throw error;
                     }
                 );
@@ -421,6 +662,159 @@
     --------------------------------------------------------- */
 
     /* -- UI handlers -------------------------------------- */
+
+    wrap("createSong", {
+        tag: "CREATE SONG",
+        enter: () => {
+            const songs = safe(() => state.songs, []);
+            TR.createSongIdsBefore = new Set(
+                Array.isArray(songs)
+                    ? songs.map(song => song && song.id).filter(Boolean)
+                    : []
+            );
+            return "beforeCount=" +
+                (Array.isArray(songs) ? songs.length : -1);
+        },
+        exit: () => {
+            const songs = safe(() => state.songs, []);
+            const added = Array.isArray(songs)
+                ? songs.find(song =>
+                    song &&
+                    song.id &&
+                    !TR.createSongIdsBefore.has(song.id)
+                )
+                : null;
+
+            if (added) {
+                TR.trackedSongId = added.id;
+            }
+
+            TR.record("song created", {
+                phase: "after createSong",
+                songId: added && added.id,
+                stateCount: Array.isArray(songs) ? songs.length : -1,
+                stateHasSong: Boolean(
+                    added &&
+                    Array.isArray(songs) &&
+                    songs.some(song => song && song.id === added.id)
+                )
+            });
+
+            return added
+                ? "newId=" + added.id
+                : "no new song id detected";
+        }
+    });
+
+    wrap("showView", {
+        tag: "SHOW VIEW",
+        enter: a => {
+            if (a[0] === "crate") {
+                TR.record("showView crate before", { view: "crate" });
+                return "view=crate " + formatTrackedStatus();
+            }
+            return "view=" + String(a[0]);
+        },
+        exit: (a) => {
+            if (a[0] === "crate") {
+                TR.record("showView crate", { view: "crate" });
+            }
+            return "";
+        }
+    });
+
+    wrap("renderCrate", {
+        tag: "RENDER CRATE",
+        exit: () => {
+            TR.record("renderCrate", {});
+            const status = trackedSongStatus();
+            return "stateCount=" + status.stateCount +
+                " stateHasSong=" + status.stateHasSong +
+                " renderedCount=" + status.renderedCount +
+                " renderedHasSong=" + status.renderedHasSong;
+        }
+    });
+
+    wrap("adoptMergedState", {
+        tag: "ADOPT MERGED STATE",
+        enter: a => {
+            const before = trackedSongStatus();
+            const incomingHasSong = Boolean(
+                TR.trackedSongId &&
+                a[0] &&
+                Array.isArray(a[0].songs) &&
+                a[0].songs.some(song =>
+                    song && song.id === TR.trackedSongId
+                )
+            );
+            TR.record("adoptMergedState before", {
+                phase: "before",
+                stateCount: before.stateCount,
+                stateHasSong: before.stateHasSong,
+                incomingHasSong: incomingHasSong
+            });
+            return "beforeCount=" + before.stateCount +
+                " beforeHasSong=" + before.stateHasSong +
+                " incomingHasSong=" + Boolean(
+                    TR.trackedSongId &&
+                    a[0] &&
+                    Array.isArray(a[0].songs) &&
+                    a[0].songs.some(song =>
+                        song && song.id === TR.trackedSongId
+                    )
+                );
+        },
+        exit: () => {
+            const after = trackedSongStatus();
+            TR.record("adoptMergedState after", {
+                phase: "after",
+                stateCount: after.stateCount,
+                stateHasSong: after.stateHasSong
+            });
+            return "afterCount=" + after.stateCount +
+                " afterHasSong=" + after.stateHasSong;
+        }
+    });
+
+    wrap("addSectionFromMenu", {
+        tag: "SECTION MENU HANDLER",
+        enter: a => {
+            TR.record("section menu handler invoked", {
+                type: a[0]
+            });
+            return "type=" + String(a[0]);
+        },
+        exit: (a, value) => value
+            ? "sectionId=" + String(value.id || "")
+            : "no section returned"
+    });
+
+    wrap("addSection", {
+        tag: "ADD SECTION",
+        enter: a => {
+            const song = safe(() => getCurrentSong(), null);
+            TR.sectionsBefore = song && Array.isArray(song.sections)
+                ? song.sections.length
+                : -1;
+            return "type=" + String(a[0]) +
+                " currentSong=" + Boolean(song) +
+                " sectionsBefore=" + TR.sectionsBefore;
+        },
+        exit: (a, value) => {
+            const song = safe(() => getCurrentSong(), null);
+            const count = song && Array.isArray(song.sections)
+                ? song.sections.length
+                : -1;
+            TR.record("addSection result", {
+                phase: "after addSection",
+                type: a[0],
+                sectionsBefore: TR.sectionsBefore,
+                sectionsAfter: count
+            });
+            return "sectionsAfter=" + count +
+                " created=" + Boolean(value);
+        }
+    });
 
     wrap("restoreTrash", {
         tag: "HANDLER restoreTrash (CONTROL - works today)",
@@ -560,13 +954,32 @@
 
     wrap("runPushTransaction", {
         tag: "PUSH runPushTransaction",
-        exit: (a, v, err) => err
-            ? "*** TRANSACTION FAILED: " + err
-            : "transaction committed\n            " + formatPanel(panel())
+        exit: (a, v, err) => {
+            if (err) {
+                return "*** TRANSACTION FAILED: " + err;
+            }
+
+            TR.record("transaction committed", {});
+            return formatTrackedStatus();
+        },
+        failure: (a, error) => {
+            TR.record("transaction failed", {
+                errorCode: error && error.code,
+                errorMessage: error && error.message
+            });
+        }
     });
 
     wrap("pushState", {
         tag: "PUSH pushState",
+        enter: () => {
+            TR.record("pushState started", {
+                signedIn: safe(() => isSignedIn(), false),
+                pushInFlight: safe(() => Boolean(pushInFlight), false),
+                pushPending: safe(() => Boolean(pushPending), false)
+            });
+            return "signedIn=" + safe(() => isSignedIn(), false);
+        },
         exit: (a, v, err) => err
             ? "*** PUSH FAILED: " + err
             : "push resolved"
@@ -587,6 +1000,14 @@
 
         return label;
     };
+
+    function formatTrackedStatus() {
+
+        const status = trackedSongStatus();
+        return "songId=" + String(status.songId || "") +
+            " stateCount=" + status.stateCount +
+            " stateHasSong=" + status.stateHasSong;
+    }
 
     TR.snap = function (label) {
 

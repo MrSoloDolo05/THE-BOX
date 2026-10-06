@@ -221,9 +221,33 @@ function saveState(options) {
             typeof pushState === "function"
         ) {
             clearTimeout(cloudPushTimer);
+            if (window.__TR && typeof window.__TR.record === "function") {
+                window.__TR.record("push scheduled", {
+                    scheduledDelayMs: 500,
+                    signedIn: isSignedIn()
+                });
+            }
             cloudPushTimer = setTimeout(() => {
+                if (window.__TR && typeof window.__TR.record === "function") {
+                    window.__TR.record("scheduled push fired", {
+                        signedIn: isSignedIn()
+                    });
+                }
                 pushState();
             }, 500);
+        } else if (
+            !silent &&
+            window.__TR &&
+            typeof window.__TR.record === "function"
+        ) {
+            window.__TR.record("push not scheduled", {
+                signedIn:
+                    typeof isSignedIn === "function"
+                        ? isSignedIn()
+                        : false,
+                authCheckAvailable:
+                    typeof isSignedIn === "function"
+            });
         }
 
     } catch (error) {

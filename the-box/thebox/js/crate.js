@@ -580,10 +580,6 @@ function createSong() {
 
     state.songs.unshift(song);
 
-    if (window.__TR && typeof window.__TR.trackSong === "function") {
-        window.__TR.trackSong(song.id);
-    }
-
     currentSongId =
         song.id;
 

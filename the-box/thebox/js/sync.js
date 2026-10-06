@@ -93,13 +93,6 @@ async function initAuth() {
         return;
     }
 
-    if (window.__TR && typeof window.__TR.record === "function") {
-        window.__TR.record("auth observation started", {
-            authResolved: false,
-            authenticated: false
-        });
-    }
-
     /* The app now requires manual login triggers. On load we
        only observe the Firebase auth state and update the UI;
        we never attempt to silently sign the user in. */
@@ -109,13 +102,6 @@ async function initAuth() {
             if (user) {
 
                 currentUser = user;
-                if (window.__TR && typeof window.__TR.record === "function") {
-                    window.__TR.record("auth resolved", {
-                        authResolved: true,
-                        authenticated: true,
-                        uidHint: String(user.uid || "").slice(-6)
-                    });
-                }
                 updateAuthButton();
                 setSyncStatus("syncing");
 
@@ -134,12 +120,6 @@ async function initAuth() {
             } else {
 
                 currentUser = null;
-                if (window.__TR && typeof window.__TR.record === "function") {
-                    window.__TR.record("auth resolved", {
-                        authResolved: true,
-                        authenticated: false
-                    });
-                }
                 updateAuthButton();
                 stopListening();
                 setSyncStatus("offline");
@@ -193,7 +173,6 @@ function getUserDocRef() {
     return firebaseDb.collection("users").doc(currentUser.uid);
 }
 
-
 /* =========================================================
    PUSH / PULL
 ========================================================= */
@@ -202,6 +181,18 @@ function getUserDocRef() {
    triggered push could otherwise open two transactions at once. */
 let pushInFlight = null;
 let pushPending = false;
+
+const MAX_STALE_TRANSACTION_RETRIES = 3;
+
+function isStaleTransactionVersionError(error) {
+
+    return Boolean(
+        error &&
+        error.code === "failed-precondition" &&
+        /stored version \(\d+\) does not match the required base version \(\d+\)/i
+            .test(String(error.message || ""))
+    );
+}
 
 /* Follow-up pushes exist to catch edits made while a transaction was
    open. They are a safety net, not the main path, so they are capped:
@@ -242,7 +233,6 @@ async function pushState() {
            edits made while the transaction was open still reach
            the cloud. */
         pushPending = true;
-
         return pushInFlight.task;
     }
 
@@ -251,20 +241,50 @@ async function pushState() {
 
             setSyncStatus("syncing");
 
-            await runPushTransaction(docRef);
+            let staleVersionRetries = 0;
+
+            while (true) {
+                try {
+                    await runPushTransaction(
+                        docRef
+                    );
+                    break;
+                } catch (error) {
+                    if (
+                        !isStaleTransactionVersionError(error) ||
+                        staleVersionRetries >=
+                            MAX_STALE_TRANSACTION_RETRIES
+                    ) {
+                        throw error;
+                    }
+
+                    staleVersionRetries += 1;
+
+                    const delayMs =
+                        100 * staleVersionRetries;
+
+                    console.warn(
+                        "Push transaction saw a stale Firestore version; retrying with a fresh read.",
+                        {
+                            attempt: staleVersionRetries,
+                            errorCode: error.code,
+                            errorMessage: error.message
+                        }
+                    );
+
+                    await new Promise(resolve => {
+                        setTimeout(() => {
+                            resolve();
+                        }, delayMs);
+                    });
+                }
+            }
 
             setSyncStatus("synced");
 
         } catch (error) {
 
             console.error("Push failed:", error);
-            if (window.__TR && typeof window.__TR.record === "function") {
-                window.__TR.record("push failed", {
-                    errorCode: error && error.code,
-                    errorMessage: error && error.message
-                });
-            }
-
             setSyncStatus("error");
         }
     })();
@@ -289,12 +309,11 @@ async function pushState() {
    first one's committed document and merges on top of it instead of
    overwriting it. */
 async function runPushTransaction(docRef) {
+    const baseline =
+        getSyncBaseline();
 
     const localSnapshot =
         captureSyncState(state);
-
-    const baseline =
-        getSyncBaseline();
 
     let mergedState = null;
 
@@ -302,11 +321,16 @@ async function runPushTransaction(docRef) {
 
         const doc = await transaction.get(docRef);
 
-        const cloudState =
+        const cloudData =
             doc.exists &&
             doc.data() &&
             doc.data().state
-                ? doc.data().state
+                ? doc.data()
+                : null;
+
+        const cloudState =
+            cloudData
+                ? cloudData.state
                 : null;
 
         mergedState = mergeSyncState(
@@ -403,7 +427,7 @@ async function pullState() {
     try {
         setSyncStatus("syncing");
 
-        const doc = await docRef.get();
+        const doc = await docRef.get({ source: "server" });
 
         const cloudState =
             doc.exists &&
@@ -1079,7 +1103,6 @@ function mergeSyncState(localRaw, cloudRaw, baseline) {
     SYNC_LIVE_COLLECTIONS.forEach(collection => {
 
         merged[collection] = merged[collection].filter(record => {
-
             /* A purge outranks every other signal. Even when no
                tombstone survives, a purged record is forced to
                stay deleted, so a stale live copy can never
@@ -1543,7 +1566,18 @@ function startListening() {
     if (!docRef) return;
 
     firebaseUnsubscribe = docRef.onSnapshot(
+        { includeMetadataChanges: true },
         (doc) => {
+            const metadata = doc.metadata || {};
+            const hasPendingWrites =
+                typeof metadata.hasPendingWrites === "boolean"
+                    ? metadata.hasPendingWrites
+                    : null;
+
+            if (metadata.fromCache === true) {
+                return;
+            }
+
             if (!doc.exists || !doc.data()) return;
 
             const data = doc.data();
@@ -1554,8 +1588,14 @@ function startListening() {
 
             /* Skip our own echo to avoid a sync loop. The digest
                ignores object key order, so a Firestore round trip
-               that reorders fields is still recognised as ours. */
-            if (signature === lastPushedSignature) {
+               that reorders fields is still recognised as ours.
+               A server-backed snapshot with pending local writes is
+               still merged; it may contain a remote server update
+               alongside this client's local overlay. */
+            const signatureMatch =
+                signature === lastPushedSignature;
+
+            if (signatureMatch && !hasPendingWrites) {
                 setSyncStatus("synced");
                 return;
             }
@@ -1589,7 +1629,7 @@ function startListening() {
                 stateDigest(data.state)
             ) {
                 pushState();
-            } else {
+            } else if (!hasPendingWrites) {
 
                 setSyncBaseline(
                     buildSyncBaseline(data.state)

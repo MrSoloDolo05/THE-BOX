@@ -347,15 +347,17 @@ function renderRhymeWords(list, fallback) {
     }
     return list
         .map(word => `
-            <span
+            <button
                 class="rhyme-word"
                 data-rhyme-word="${escapeAttribute(
                     word.replace(/'/g, "")
                 )}"
                 title="Insert ${escapeHTML(word)}"
+                aria-label="Insert rhyme: ${escapeAttribute(word)}"
+                type="button"
             >
                 ${escapeHTML(word)}
-            </span>
+            </button>
         `)
         .join("");
 }
@@ -1212,8 +1214,9 @@ function performSearch(query) {
 
                     action:
                         () =>
-                            showView(
-                                "liners"
+                            openLinerSearchResult(
+                                liner.id,
+                                "lines"
                             )
                 });
             }
@@ -1253,8 +1256,9 @@ function performSearch(query) {
 
                     action:
                         () =>
-                            showView(
-                                "liners"
+                            openLinerSearchResult(
+                                verse.id,
+                                "verses"
                             )
                 });
             }
@@ -1334,6 +1338,11 @@ function performSearch(query) {
                     <div
                         class="search-result"
                         data-index="${index}"
+                        tabindex="0"
+                        role="button"
+                        aria-label="${escapeAttribute(
+                            result.type + ": " + result.title
+                        )}"
                     >
 
                         <div class="search-result-type">

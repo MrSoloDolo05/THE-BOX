@@ -5,7 +5,7 @@
 
    LINES  -> every non-empty line becomes a one liner
    VERSES -> blank-line separated blocks become verses
-   SONG   -> section headers ("VERSE 1:", "Chorus", ALL-CAPS)
+   SONG   -> explicit section headers ("VERSE 1:", "[Chorus]")
              become sections of a brand new song
 ========================================================= */
 
@@ -111,12 +111,7 @@ function isSectionHeader(line) {
         return true;
     }
 
-    /* Short ALL-CAPS lines read as headers. */
-    return (
-        value.length <= 30 &&
-        value === value.toUpperCase() &&
-        /[A-Z]/.test(value)
-    );
+    return false;
 }
 
 
@@ -171,8 +166,26 @@ function titleFromFilename(name) {
 
 function parseSong(text) {
 
+    const source =
+        String(text || "");
+
+    const titleMatch =
+        source.match(
+            /^\uFEFF?\s*TITLE\s*:\s*(.+?)\s*(?:\r?\n|$)/i
+        );
+
+    const title =
+        titleMatch
+            ? titleMatch[1].trim()
+            : "";
+
+    const body =
+        titleMatch
+            ? source.slice(titleMatch[0].length)
+            : source;
+
     const nonEmpty =
-        parseLines(text);
+        parseLines(body);
 
     if (!nonEmpty.length) {
         return null;
@@ -180,9 +193,7 @@ function parseSong(text) {
 
     const hasHeader =
         nonEmpty.some(isSectionHeader);
-
     const sections = [];
-    let title = null;
     let current = null;
 
     nonEmpty.forEach(line => {
@@ -198,11 +209,6 @@ function parseSong(text) {
                 lyrics: []
             };
 
-            return;
-        }
-
-        if (!title && hasHeader) {
-            title = line.trim();
             return;
         }
 
@@ -225,7 +231,7 @@ function parseSong(text) {
        If the text has blank-line separated blocks, split it
        into auto-labelled stanzas (VERSE 1, VERSE 2, ...). */
     const stanzas =
-        String(text || "")
+        body
             .split(/\r?\n\s*\r?\n/)
             .map(block =>
                 block
@@ -240,7 +246,7 @@ function parseSong(text) {
     ) {
 
         return {
-            title: title || "",
+            title,
             sections: stanzas.map(
                 (stanza, index) => ({
                     type: "VERSE " + (index + 1),
@@ -251,7 +257,7 @@ function parseSong(text) {
     }
 
     return {
-        title: title || "",
+        title,
         sections: sections
     };
 }
@@ -377,10 +383,8 @@ function importAsSong(text, filename) {
     const now =
         new Date().toISOString();
 
-    /* Title priority: explicit first line, then the source filename
-       ("My New Song.txt" -> "My New Song"), then existing fallback.
-       The chosen title line is already excluded from lyric content
-       by parseSong(), so lyrics are never destroyed. */
+    /* Explicit TITLE metadata takes precedence. Otherwise a supported
+       text filename may provide the title; lyric text is never used. */
     const filenameTitle =
         titleFromFilename(filename || lastImportFilename || "");
 
@@ -446,6 +450,7 @@ function openImportModal() {
     }
 
     importMode = "lines";
+    lastImportFilename = "";
 
     modalTitle.textContent =
         "IMPORT LINES";
@@ -515,13 +520,15 @@ function openImportModal() {
         <input
             id="lines-import-file"
             type="file"
-            accept=".txt,.md,text/plain"
+            accept=".txt,.md,.markdown,.text,text/plain"
             hidden
         >
 
         <div
             id="import-result"
             class="import-result"
+            role="status"
+            aria-live="polite"
         ></div>
     `;
 
@@ -577,10 +584,10 @@ function openImportModal() {
             event => {
 
                 readImportFile(
-                    event.target.files?.[0]
+                    event.currentTarget.files?.[0]
                 );
 
-                event.target.value = "";
+                event.currentTarget.value = "";
             }
         );
     }
@@ -669,8 +676,10 @@ function setImportMode(
             "Blocks separated by blank lines become VERSES.",
 
         song:
-            "Section headers like [Verse], Chorus:, VERSE 1 " +
-            "or BRIDGE split the song into sections. If none " +
+            "Optional TITLE: Song Name, then explicit headers " +
+            "like [Verse], Chorus:, VERSE 1 " +
+            "or BRIDGE split the song into sections. Ordinary " +
+            "ALL-CAPS lines remain lyrics. If no headers " +
             "are found, the text is split on blank lines into " +
             "auto-labelled stanzas."
     };
@@ -691,7 +700,8 @@ function setImportMode(
         );
 
     if (result) {
-        result.innerHTML = "";
+        result.className = "import-result";
+        result.textContent = "";
     }
 }
 
@@ -702,14 +712,46 @@ function setImportMode(
 
 let lastImportFilename = "";
 
+function showImportResult(status, message) {
+
+    const result =
+        document.getElementById("import-result");
+
+    if (!result) {
+        return;
+    }
+
+    result.className =
+        `import-result import-result--${status}`;
+
+    result.textContent = message;
+}
+
+
+function isSupportedImportFile(file) {
+
+    return /\.(txt|md|markdown|text)$/i.test(
+        String(file?.name || "")
+    );
+}
+
+
 function readImportFile(file) {
 
     if (!file) {
         return;
     }
 
+    if (!isSupportedImportFile(file)) {
+        showImportResult(
+            "error",
+            "Choose a .txt, .md, .markdown or .text file."
+        );
+        return;
+    }
+
     lastImportFilename =
-        (file && file.name) || "";
+        file.name;
 
     const reader =
         new FileReader();
@@ -726,38 +768,32 @@ function readImportFile(file) {
                 String(reader.result || "");
         }
 
-        const result =
-            document.getElementById(
-                "import-result"
-            );
-
-        if (result) {
-
-            result.innerHTML = `
-                <span style="color:#8fb694">
-                    Loaded “${escapeHTML(
-                        file.name
-                    )}”. Ready to import.
-                </span>
-            `;
-        }
+        showImportResult(
+            "success",
+            `Loaded “${file.name}”. Ready to import.`
+        );
     };
 
     reader.onerror = function () {
 
-        const result =
-            document.getElementById(
-                "import-result"
-            );
+        lastImportFilename = "";
 
-        if (result) {
+        const input =
+            document.getElementById("import-text-input");
 
-            result.innerHTML = `
-                <span style="color:#c06a6a">
-                    Could not read that file.
-                </span>
-            `;
+        if (input) {
+            input.value = "";
         }
+
+        console.error(
+            "Could not read text import file:",
+            reader.error
+        );
+
+        showImportResult(
+            "error",
+            "Could not read that file."
+        );
     };
 
     reader.readAsText(file);
@@ -778,22 +814,11 @@ function runImport() {
     const text =
         input?.value || "";
 
-    const result =
-        document.getElementById(
-            "import-result"
-        );
-
     if (!String(text).trim()) {
-
-        if (result) {
-
-            result.innerHTML = `
-                <span style="color:#c99a52">
-                    Paste text or choose a file first.
-                </span>
-            `;
-        }
-
+        showImportResult(
+            "warning",
+            "Paste text or choose a supported text file first."
+        );
         return;
     }
 
@@ -803,30 +828,13 @@ function runImport() {
     if (importMode === "song") {
 
         if (importAsSong(text, lastImportFilename)) {
-
-            if (result) {
-
-                result.innerHTML = `
-                    <span style="color:#8fb694">
-                        Song imported.
-                    </span>
-                `;
-            }
-
+            showImportResult("success", "Song imported.");
             setTimeout(closeModal, 700);
 
             return;
         }
 
-        if (result) {
-
-            result.innerHTML = `
-                <span style="color:#c99a52">
-                    Nothing to import.
-                </span>
-            `;
-        }
-
+        showImportResult("warning", "Nothing to import.");
         return;
     }
 
@@ -837,21 +845,12 @@ function runImport() {
             : importLines(text);
 
 
-    if (result) {
-
-        result.innerHTML = added
-            ? `
-                <span style="color:#8fb694">
-                    ${added}
-                    ${added === 1 ? "item" : "items"} imported.
-                </span>
-            `
-            : `
-                <span style="color:#c99a52">
-                    Nothing new — everything was already in your library.
-                </span>
-            `;
-    }
+    showImportResult(
+        added ? "success" : "warning",
+        added
+            ? `${added} ${added === 1 ? "item" : "items"} imported.`
+            : "Nothing new — everything was already in your library."
+    );
 
     if (added) {
         setTimeout(closeModal, 700);

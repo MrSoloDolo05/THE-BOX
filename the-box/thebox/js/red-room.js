@@ -635,6 +635,9 @@ function renderSections(force) {
                                             data-action="section-menu"
                                             aria-haspopup="menu"
                                             aria-expanded="false"
+                                            aria-label="Actions for ${escapeAttribute(
+                                                label
+                                            )}"
                                         >
                                             •••
                                         </button>
@@ -1953,6 +1956,11 @@ function toggleSectionMenu(button) {
             "open"
         );
 
+        orientMenuForViewport(
+            kebab.querySelector(".section-menu"),
+            button
+        );
+
         button.setAttribute(
             "aria-expanded",
             "true"
@@ -1971,6 +1979,10 @@ function closeOpenSectionMenus() {
             kebab.classList.remove(
                 "open"
             );
+
+            kebab
+                .querySelector(".section-menu")
+                ?.classList.remove("opens-up");
 
             kebab
                 .querySelector(
@@ -2609,4 +2621,3 @@ window.addEventListener(
         }
     }
 );
-

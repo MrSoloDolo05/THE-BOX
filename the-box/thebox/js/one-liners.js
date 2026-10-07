@@ -124,6 +124,10 @@ function closeOpenLinerMenus() {
             );
 
             kebab
+                .querySelector(".liner-menu")
+                ?.classList.remove("opens-up");
+
+            kebab
                 .querySelector(
                     ".liner-kebab-btn"
                 )
@@ -156,6 +160,11 @@ function toggleLinerMenu(button) {
 
         kebab.classList.add(
             "open"
+        );
+
+        orientMenuForViewport(
+            kebab.querySelector(".liner-menu"),
+            button
         );
 
         button.setAttribute(
@@ -372,13 +381,17 @@ function renderLiners() {
         );
 
     if (linesInput) {
-        linesInput.style.display =
-            isLines ? "" : "none";
+        linesInput.classList.toggle(
+            "hidden",
+            !isLines
+        );
     }
 
     if (versesInput) {
-        versesInput.style.display =
-            isLines ? "none" : "flex";
+        versesInput.classList.toggle(
+            "hidden",
+            isLines
+        );
     }
 
     const otherContainer =
@@ -389,16 +402,18 @@ function renderLiners() {
         );
 
     if (otherContainer) {
-        otherContainer.style.display =
-            "none";
+        otherContainer.classList.add(
+            "hidden"
+        );
     }
 
     if (!container) {
         return;
     }
 
-    container.style.display =
-        "";
+    container.classList.remove(
+        "hidden"
+    );
 
     let items =
         isLines
@@ -517,10 +532,6 @@ function renderLiners() {
             ?.closest(".liner")
             ?.dataset.itemId || null;
 
-    const sortedItems =
-        [...items].reverse();
-
-
     container.innerHTML =
         items
             .map((item, displayIndex) => {
@@ -610,6 +621,7 @@ function renderLiners() {
                                     data-action="menu-item"
                                     aria-haspopup="menu"
                                     aria-expanded="false"
+                                    aria-label="Actions for ${kindLabel}: ${editLabel}"
                                 >
                                     •••
                                 </button>
@@ -692,6 +704,14 @@ function renderLiners() {
                 "open"
             );
 
+            const restoredButton =
+                restoredKebab.querySelector(".liner-kebab-btn");
+
+            orientMenuForViewport(
+                restoredKebab.querySelector(".liner-menu"),
+                restoredButton
+            );
+
             restoredKebab
                 .querySelector(
                     ".liner-kebab-btn"
@@ -718,6 +738,55 @@ function renderLiners() {
             });
         }
     }
+}
+
+function openLinerSearchResult(itemId, view) {
+
+    if (
+        view !== "lines" &&
+        view !== "verses"
+    ) {
+        return;
+    }
+
+    linerFilter = "all";
+
+    document
+        .querySelectorAll(".filter-btn")
+        .forEach(button => {
+            button.classList.toggle(
+                "active",
+                button.dataset.filter === "all"
+            );
+        });
+
+    setLinerView(view);
+    showView("liners");
+
+    const item =
+        Array.from(
+            document.querySelectorAll(".liner[data-item-id]")
+        ).find(element => element.dataset.itemId === itemId);
+
+    if (!item) {
+        return;
+    }
+
+    item.scrollIntoView({
+        behavior:
+            window.matchMedia(
+                "(prefers-reduced-motion: reduce)"
+            ).matches
+                ? "auto"
+                : "smooth",
+        block: "center"
+    });
+
+    item.classList.add("search-match");
+
+    setTimeout(() => {
+        item.classList.remove("search-match");
+    }, 1800);
 }
 
 
@@ -979,14 +1048,7 @@ function openLinerPicker() {
 
     modalBody.innerHTML = `
 
-        <div
-            style="
-                color:#666;
-                font-family:'DM Mono';
-                font-size:8px;
-                margin-bottom:18px;
-            "
-        >
+        <div class="insert-target-note">
             INSERTING INTO:
             ${escapeHTML(
                 currentSection?.type ||
@@ -1018,10 +1080,7 @@ function openLinerPicker() {
 
         <div
             id="picker-list"
-            style="
-                max-height:400px;
-                overflow:auto;
-            "
+            class="picker-list"
         >
 
             ${renderPickerItems("lines")}
@@ -1097,7 +1156,7 @@ function renderPickerItems(
     if (!items.length) {
 
         return `
-            <div style="color:#666">
+            <div class="picker-empty">
                 NO ${view.toUpperCase()} YET.
             </div>
         `;
@@ -1108,20 +1167,12 @@ function renderPickerItems(
         .map(
             item => `
                 <div
-                    class="picker-item"
+                    class="${
+                        view === "verses"
+                            ? "picker-item picker-item--verse"
+                            : "picker-item"
+                    }"
                     data-item-id="${item.id}"
-                    style="
-                        padding:15px;
-                        border-bottom:1px solid rgba(255,255,255,.07);
-                        cursor:pointer;
-                        color:#bbb;
-                        line-height:1.6;
-                        ${
-                            view === "verses"
-                                ? "white-space:pre-wrap;"
-                                : ""
-                        }
-                    "
                 >
                     ${
                         view === "lines"

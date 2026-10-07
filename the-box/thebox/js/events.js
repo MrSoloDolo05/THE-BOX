@@ -121,6 +121,34 @@ function delegateKeyActivate(container, selector, handler) {
     );
 }
 
+function orientMenuForViewport(menu, trigger) {
+
+    if (!menu || !trigger) {
+        return;
+    }
+
+    menu.classList.remove("opens-up");
+
+    const menuRect =
+        menu.getBoundingClientRect();
+
+    const triggerRect =
+        trigger.getBoundingClientRect();
+
+    const roomBelow =
+        window.innerHeight - triggerRect.bottom;
+
+    const roomAbove =
+        triggerRect.top;
+
+    if (
+        menuRect.bottom > window.innerHeight &&
+        roomAbove > roomBelow
+    ) {
+        menu.classList.add("opens-up");
+    }
+}
+
 
 /* ---------------------------------------------------------
    Modal confirm handler manager

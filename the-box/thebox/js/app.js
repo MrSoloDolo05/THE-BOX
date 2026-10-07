@@ -500,6 +500,8 @@ function escapeAttribute(value) {
    MODAL
 ========================================================= */
 
+let modalReturnFocus = null;
+
 function openModal() {
 
     const modal =
@@ -512,10 +514,14 @@ function openModal() {
         return;
     }
 
+    if (!modal.classList.contains("open")) {
+        modalReturnFocus = document.activeElement;
+    }
 
     modal.classList.add(
         "open"
     );
+    modal.setAttribute("aria-hidden", "false");
 
     /* Lock background scroll while the modal is up. */
     refreshScrollLock();
@@ -525,18 +531,16 @@ function openModal() {
        Enter key handling) have a predictable starting point. */
     setTimeout(() => {
 
+        if (!modal.classList.contains("open")) {
+            return;
+        }
+
         const first =
             modal.querySelector(
                 "input:not([type=\"file\"]):not([type=\"hidden\"]), textarea, select"
             );
 
-        if (first) {
-            try {
-                first.focus();
-            } catch (error) {
-                /* Focus may fail on hidden/disabled elements. */
-            }
-        }
+        (first || modal.querySelector(".modal"))?.focus();
     }, 10);
 }
 
@@ -557,11 +561,22 @@ function closeModal() {
     modal.classList.remove(
         "open"
     );
+    modal.setAttribute("aria-hidden", "true");
 
     refreshScrollLock();
 
-
     modalConfirm.clear();
+
+    const returnFocus =
+        modalReturnFocus;
+
+    modalReturnFocus = null;
+
+    if (returnFocus?.isConnected) {
+        returnFocus.focus({
+            preventScroll: true
+        });
+    }
 }
 
 
@@ -590,6 +605,69 @@ function setupModal() {
 
 
     if (overlay) {
+
+        overlay.addEventListener(
+            "keydown",
+            event => {
+
+                if (!overlay.classList.contains("open")) {
+                    return;
+                }
+
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeModal();
+                    return;
+                }
+
+                if (event.key !== "Tab") {
+                    return;
+                }
+
+                const focusable =
+                    Array.from(
+                        overlay.querySelectorAll(
+                            "button:not([disabled]), input:not([disabled]):not([type=\"hidden\"]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex=\"-1\"])"
+                        )
+                    ).filter(element =>
+                        !element.closest("[hidden]") &&
+                        element.getClientRects().length > 0
+                    );
+
+                if (!focusable.length) {
+                    event.preventDefault();
+                    overlay.querySelector(".modal")?.focus();
+                    return;
+                }
+
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                const dialog =
+                    overlay.querySelector(".modal");
+
+                if (
+                    event.shiftKey &&
+                    (
+                        document.activeElement === first ||
+                        document.activeElement === dialog ||
+                        !overlay.contains(document.activeElement)
+                    )
+                ) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (
+                    !event.shiftKey &&
+                    (
+                        document.activeElement === last ||
+                        document.activeElement === dialog ||
+                        !overlay.contains(document.activeElement)
+                    )
+                ) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        );
 
         /* Dismiss sharing modals via Cancel. */
         if (cancelButton) {
@@ -785,6 +863,14 @@ function openMobileSidebar() {
         "open"
     );
 
+    document
+        .getElementById("mobile-menu")
+        ?.setAttribute("aria-expanded", "true");
+
+    document
+        .getElementById("sidebar-close")
+        ?.focus({ preventScroll: true });
+
     const backdrop =
         getSidebarBackdrop();
 
@@ -799,12 +885,6 @@ function openMobileSidebar() {
             "false"
         );
 
-        /* Block pointer interactions on the underlying page
-           even before the CSS transition completes in some
-           browsers. The mobile media query already adds
-           `position: fixed` to `.locked`, so this is
-           strictly an accessibility/click-safety net. */
-        backdrop.style.pointerEvents = "auto";
     }
 
     /* Lock background scroll behind the drawer. */
@@ -833,6 +913,9 @@ function closeMobileSidebar() {
     const sidebar =
         getSidebar();
 
+    const wasFocusedInside =
+        sidebar?.contains(document.activeElement);
+
     if (sidebar) {
 
         sidebar.classList.remove(
@@ -855,7 +938,17 @@ function closeMobileSidebar() {
         );
     }
 
+    document
+        .getElementById("mobile-menu")
+        ?.setAttribute("aria-expanded", "false");
+
     refreshScrollLock();
+
+    if (wasFocusedInside) {
+        document
+            .getElementById("mobile-menu")
+            ?.focus({ preventScroll: true });
+    }
 }
 
 
@@ -1039,8 +1132,7 @@ function setupIntro() {
         setTimeout(
             () => {
 
-                intro.style.display =
-                    "none";
+                intro.classList.add("hidden");
 
             },
             1300
@@ -1128,7 +1220,7 @@ function restoreLastView() {
     if (view === "redroom") {
 
         const song =
-            uiState.songId
+            uiState?.songId
                 ? state.songs.find(
                     song =>
                         song.id ===
@@ -2139,29 +2231,6 @@ function setupRedRoom() {
     );
 
 
-    const saveButton =
-        document.getElementById(
-            "save-song-button"
-        );
-
-
-    if (saveButton) {
-
-        saveButton.addEventListener(
-            "click",
-            exitToCrate
-        );
-
-        saveButton.textContent =
-            "← CRATE";
-
-        saveButton.setAttribute(
-            "aria-label",
-            "Leave Red Room and return to Crate"
-        );
-    }
-
-
     const statusSelection =
         document.getElementById(
             "song-meta-status"
@@ -2832,6 +2901,16 @@ function setupTools() {
                 );
             }
         );
+
+        delegateKeyActivate(
+            rhymeResults,
+            ".rhyme-word",
+            (event, element) => {
+                insertRhyme(
+                    element.dataset.rhymeWord
+                );
+            }
+        );
     }
 
 
@@ -2871,6 +2950,16 @@ function setupTools() {
                     Number(
                         el.dataset.index
                     )
+                );
+            }
+        );
+
+        delegateKeyActivate(
+            searchResults,
+            ".search-result",
+            (event, element) => {
+                searchResultClick(
+                    Number(element.dataset.index)
                 );
             }
         );
@@ -2948,6 +3037,20 @@ function initApp() {
     restoreLastView();
 
     saveUIState();
+
+    if (
+        "serviceWorker" in navigator &&
+        location.protocol !== "file:"
+    ) {
+        navigator.serviceWorker
+            .register("sw.js")
+            .catch(error => {
+                console.error(
+                    "Could not register the app-shell service worker:",
+                    error
+                );
+            });
+    }
 
 
     /* ---- Firebase sync ---- */

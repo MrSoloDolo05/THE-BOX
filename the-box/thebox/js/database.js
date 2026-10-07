@@ -680,6 +680,19 @@ function importDatabase(event) {
         return;
     }
 
+    if (!/\.json$/i.test(file.name)) {
+        alert("Choose a THE BOX .json backup file.");
+        event.target.value = "";
+        return;
+    }
+
+    if (!window.confirm(
+        "Restore this backup? It will replace the entire current database."
+    )) {
+        event.target.value = "";
+        return;
+    }
+
     const reader =
         new FileReader();
 
@@ -694,6 +707,7 @@ function importDatabase(event) {
 
             if (
                 !imported ||
+                typeof imported !== "object" ||
                 !Array.isArray(imported.songs) ||
                 !Array.isArray(imported.folders) ||
                 !Array.isArray(imported.liners) ||
@@ -704,6 +718,30 @@ function importDatabase(event) {
                     "Invalid THE BOX database."
                 );
 
+                return;
+            }
+
+            const hasValidRecords =
+                records =>
+                    records.every(record =>
+                        record &&
+                        typeof record === "object" &&
+                        !Array.isArray(record)
+                    );
+
+            if (
+                !hasValidRecords(imported.songs) ||
+                !hasValidRecords(imported.folders) ||
+                !hasValidRecords(imported.liners) ||
+                !hasValidRecords(imported.trash) ||
+                (
+                    Array.isArray(imported.verses) &&
+                    !hasValidRecords(imported.verses)
+                )
+            ) {
+                alert(
+                    "Invalid THE BOX database: one or more records are malformed."
+                );
                 return;
             }
 

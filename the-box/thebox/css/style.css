@@ -32,6 +32,12 @@
     --lineBorder: rgba(143,182,148,.20);
     --lineText: #dde7d8;
     --lineMeta: #8ea693;
+    --font-ui: "Manrope", sans-serif;
+    --font-meta: "DM Mono", monospace;
+    --font-writing-size: 15px;
+    --font-writing-leading: 1.75;
+    --focus-ring: 2px solid rgba(240,238,233,.55);
+    --page-gutter: 45px;
     --folderOpen: #d9e9fb;
     --folderOpenBorder: rgba(147,188,230,.60);
     --folderOpenTint: rgba(64,125,190,.20);
@@ -57,7 +63,7 @@ body {
     overflow-x: hidden;
     background: var(--black);
     color: var(--text);
-    font-family: "Manrope", sans-serif;
+    font-family: var(--font-ui);
     overflow-wrap: break-word;
     -webkit-text-size-adjust: 100%;
 }
@@ -718,7 +724,7 @@ button {
 
     overflow-y: auto;
 
-    padding: 45px;
+    padding: var(--page-gutter);
 }
 
 .content::-webkit-scrollbar {
@@ -1755,7 +1761,7 @@ textarea:focus-visible,
 select:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
-    outline: 2px solid rgba(240,238,233,.55);
+    outline: var(--focus-ring);
     outline-offset: 2px;
 }
 
@@ -2145,11 +2151,11 @@ a:focus-visible,
 
     color: #ddd;
 
-    font-family: "Manrope", sans-serif;
+    font-family: var(--font-ui);
 
-    font-size: 14px;
+    font-size: var(--font-writing-size);
 
-    line-height: 1.7;
+    line-height: var(--font-writing-leading);
 
     padding: 14px;
 }
@@ -2762,6 +2768,11 @@ a:focus-visible,
     cursor: pointer;
 
     font-size: 11px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 6px;
+    background: rgba(255,255,255,.02);
+    font-family: var(--font-meta);
 }
 
 .rhyme-word:hover {
@@ -2769,6 +2780,11 @@ a:focus-visible,
 
     border-color:
         rgba(200,70,80,.4);
+}
+
+.rhyme-word:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 1px;
 }
 
 .idea-actions {
@@ -4236,6 +4252,242 @@ a:focus-visible,
     #view-redroom .redroom-header {
         padding: 16px 14px 14px;
     }
+
+}
+
+    /* Focused polish: keep controls quiet while making the writing surface
+       and its structure clear. */
+    .database-actions-note {
+        flex: 0 0 100%;
+        color: var(--muted);
+        font-family: var(--font-meta);
+        font-size: 8px;
+        letter-spacing: .08em;
+        line-height: 1.6;
+    }
+
+    .database-actions {
+        flex-wrap: wrap;
+    }
+
+    .tools {
+        border-left-color: rgba(221,124,132,.2);
+    }
+
+    .tool-tab {
+        min-height: 44px;
+        font-size: 9px;
+    }
+
+    .tool-input {
+        font-size: 15px;
+        line-height: 1.55;
+    }
+
+    .tool-input:focus-visible {
+        outline: var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .rhyme-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        line-height: 1.6;
+    }
+
+    .rhyme-group {
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .move-folder-options {
+        display: grid;
+        gap: 6px;
+    }
+
+    .move-folder-option {
+        width: 100%;
+        min-height: 44px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: rgba(255,255,255,.025);
+        color: #bbb;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .move-folder-option:hover,
+    .move-folder-option:focus-visible {
+        border-color: rgba(140,185,235,.55);
+        background: rgba(255,255,255,.06);
+    }
+
+    #empty-trash-button {
+        margin-bottom: 20px;
+    }
+
+    .liner-list {
+        overflow: visible;
+    }
+
+    .liner:has(.liner-kebab.open) {
+        z-index: 2;
+        overflow: visible;
+        transform: none;
+    }
+
+    .liner-menu.opens-up,
+    .section-menu.opens-up {
+        top: auto;
+        bottom: calc(100% + 6px);
+    }
+
+    .import-result--success {
+        color: #8fb694;
+    }
+
+    .import-result--error {
+        color: #c06a6a;
+    }
+
+    .import-result--warning {
+        color: #c99a52;
+    }
+
+    .insert-target-note,
+    .picker-empty {
+        color: #888;
+        font-family: var(--font-meta);
+        font-size: 9px;
+    }
+
+    .insert-target-note {
+        margin-bottom: 18px;
+    }
+
+    .picker-list {
+        max-height: min(400px, 55vh);
+        overflow: auto;
+        overscroll-behavior: contain;
+    }
+
+    .picker-item {
+        padding: 15px;
+        border-bottom: 1px solid rgba(255,255,255,.07);
+        color: #bbb;
+        line-height: 1.6;
+        cursor: pointer;
+    }
+
+    .picker-item:hover,
+    .picker-item:focus-visible {
+        background: rgba(255,255,255,.05);
+        color: white;
+    }
+
+    .picker-item--verse {
+        white-space: pre-wrap;
+    }
+
+    .liner.search-match {
+        animation: liner-search-match 1.8s ease-out;
+    }
+
+    @keyframes liner-search-match {
+        0%, 35% {
+            border-color: rgba(190,220,188,.8);
+            box-shadow: 0 0 0 2px rgba(190,220,188,.18);
+        }
+        100% {
+            border-color: rgba(143,182,148,.18);
+            box-shadow: 0 2px 10px rgba(0,0,0,.28);
+        }
+    }
+
+    #view-redroom .redroom-header {
+        padding: 8px 0 10px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    #view-redroom .song-section {
+        position: relative;
+        z-index: 0;
+        border-color: rgba(205,91,102,.2);
+        border-radius: 9px;
+        background: rgba(42,17,22,.68);
+        box-shadow: none;
+    }
+
+    #view-redroom .song-section:has(.section-kebab.open) {
+        z-index: 2;
+    }
+
+    #view-redroom .song-section.active-section {
+        border-color: rgba(199,101,112,.56);
+        box-shadow: inset 2px 0 rgba(199,101,112,.72);
+    }
+
+    #view-redroom .section-bar {
+        background: rgba(76,29,36,.16);
+    }
+
+    #view-redroom .section-editor,
+    #view-redroom .lyrics-editor {
+        min-height: 120px;
+        padding: 16px 18px;
+        font-family: var(--font-ui);
+        font-size: var(--font-writing-size);
+        line-height: var(--font-writing-leading);
+    }
+
+    #view-redroom .song-title-input {
+        border-bottom-color: rgba(255,255,255,.08);
+    }
+
+    #view-redroom .section-kebab-btn {
+        border-color: transparent;
+    }
+
+    @media (max-width: 600px) {
+        :root {
+            --page-gutter: 18px;
+        }
+
+        #view-redroom .redroom-header {
+            padding: 8px 0;
+        }
+
+        #view-redroom .section-editor,
+        #view-redroom .lyrics-editor {
+            min-height: 120px;
+            padding: 14px;
+            font-size: 16px;
+        }
+
+        #view-redroom .section-name,
+        #view-search .search-box,
+        .tool-input,
+        .import-input,
+        .add-liner input,
+        .add-verse textarea {
+            font-size: 16px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .liner.search-match {
+            animation: none;
+            outline: 2px solid rgba(190,220,188,.7);
+        }
+    }
+
+@media (max-width: 600px) {
 
     #view-redroom .section-editor,
     #view-redroom .lyrics-editor {

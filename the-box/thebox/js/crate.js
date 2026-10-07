@@ -39,13 +39,6 @@ function renderCrate() {
                             folder.id
                     ).length;
 
-                /* "Test" stays undeletable; that guard is
-                   behaviour, not styling, so it no longer drives a
-                   colour special-case. Every folder shares one blue
-                   system now. */
-                const isProtected =
-                    folder.name.trim() === "Test";
-
                 const isOpen =
                     folder.id ===
                     currentFolderId;
@@ -96,7 +89,6 @@ function renderCrate() {
                                     folder.name
                                 )}"
                                 type="button"
-                                ${isProtected ? "disabled" : ""}
                             >
                                 ×
                             </button>
@@ -224,13 +216,6 @@ function renderSongRow(
                         )
                         : "NO FOLDER"
                 }
-            </div>
-
-            <div class="song-status">
-                ${(
-                    song.status ||
-                    "Draft"
-                ).toUpperCase()}
             </div>
 
             <div class="song-actions">
@@ -771,22 +756,14 @@ function openMoveSongModal(songId) {
 
 
     modalBody.innerHTML = `
-        <div style="display:grid;gap:6px;">
+        <div class="move-folder-options">
 
             ${state.folders.map(folder => `
                 <button
-                    class="move-to-folder-option"
+                    class="move-to-folder-option move-folder-option"
                     type="button"
                     data-song-id="${songId}"
                     data-folder-id="${folder.id}"
-                    style="
-                        text-align:left;
-                        border:1px solid var(--line);
-                        background:rgba(255,255,255,.025);
-                        padding:14px;
-                        color:#bbb;
-                        cursor:pointer;
-                    "
                 >
                     ${escapeHTML(folder.name)}
                 </button>

@@ -100,7 +100,7 @@
                  SIDEBAR
             ================================================== -->
 
-            <aside class="sidebar">
+            <aside id="sidebar" class="sidebar">
 
                 <button
                     id="sidebar-close"
@@ -179,10 +179,14 @@
 
                     <div class="database-actions">
 
+                        <div class="database-actions-note">
+                            TEXT IMPORT ADDS · BACKUP IMPORT REPLACES
+                        </div>
+
                         <button
                             id="export-button"
                             type="button"
-                            title="Download a backup of everything"
+                            title="Download a complete database backup"
                         >
                             EXPORT
                         </button>
@@ -190,7 +194,7 @@
                         <button
                             data-import-open
                             type="button"
-                            title="Import lines, verses or a full song from text"
+                            title="Add lines, verses or a song from text"
                         >
                             LINES+
                         </button>
@@ -198,7 +202,7 @@
                         <button
                             id="import-button"
                             type="button"
-                            title="Load a backup / exported file"
+                            title="Restore a full backup, replacing the current database"
                         >
                             IMPORT
                         </button>
@@ -250,6 +254,9 @@
                         id="mobile-menu"
                         class="mobile-menu"
                         type="button"
+                        aria-label="Open menu"
+                        aria-controls="sidebar"
+                        aria-expanded="false"
                     >
                         ☰
                     </button>
@@ -554,10 +561,9 @@
 
                         <div
                             id="verse-list"
-                            class="liner-list liner-list--verses"
+                            class="liner-list liner-list--verses hidden"
                             role="tabpanel"
                             aria-labelledby="liner-tab-verses"
-                            style="display:none"
                         ></div>
 
                         <div class="liner-quickadd" aria-hidden="false">
@@ -767,15 +773,6 @@
 
                             </div>
 
-                            <button
-                                id="save-song-button"
-                                class="red-button"
-                                type="button"
-                                aria-label="Leave Red Room and return to Crate"
-                            >
-                                ← CRATE
-                            </button>
-
                         </div>
 
                         <div
@@ -890,7 +887,6 @@
                             id="empty-trash-button"
                             class="small-btn"
                             type="button"
-                            style="margin-bottom:20px;"
                         >
                             EMPTY TRASH
                         </button>
@@ -1060,9 +1056,16 @@
             <div
                 id="modal-overlay"
                 class="modal-overlay"
+                aria-hidden="true"
             >
 
-                <div class="modal">
+                <div
+                    class="modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="modal-title"
+                    tabindex="-1"
+                >
 
                     <h3 id="modal-title">
                         Create

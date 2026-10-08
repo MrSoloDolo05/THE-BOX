@@ -15,6 +15,7 @@
 ========================================================= */
 
 let importMode = "lines";
+let songImportInProgress = false;
 
 
 /* =========================================================
@@ -375,13 +376,22 @@ function importAsSong(text, filename) {
     }
 
     const defaultFolder =
-        state.folders.find(
-            folder =>
-                folder.name === "UNSORTED"
-        ) || state.folders[0];
+        getUnsortedFolder() ||
+        state.folders[0];
 
     const now =
         new Date().toISOString();
+
+    let songId = generateId();
+
+    while (
+        state.songs.some(
+            song =>
+                song.id === songId
+        )
+    ) {
+        songId = generateId();
+    }
 
     /* Explicit TITLE metadata takes precedence. Otherwise a supported
        text filename may provide the title; lyric text is never used. */
@@ -389,7 +399,7 @@ function importAsSong(text, filename) {
         titleFromFilename(filename || lastImportFilename || "");
 
     const song = {
-        id: generateId(),
+        id: songId,
         title:
             (parsed.title && parsed.title.trim()) ||
             filenameTitle ||
@@ -451,6 +461,7 @@ function openImportModal() {
 
     importMode = "lines";
     lastImportFilename = "";
+    songImportInProgress = false;
 
     modalTitle.textContent =
         "IMPORT LINES";
@@ -827,13 +838,23 @@ function runImport() {
 
     if (importMode === "song") {
 
+        if (songImportInProgress) {
+            return;
+        }
+
+        songImportInProgress = true;
+
         if (importAsSong(text, lastImportFilename)) {
             showImportResult("success", "Song imported.");
-            setTimeout(closeModal, 700);
+            setTimeout(() => {
+                songImportInProgress = false;
+                closeModal();
+            }, 700);
 
             return;
         }
 
+        songImportInProgress = false;
         showImportResult("warning", "Nothing to import.");
         return;
     }

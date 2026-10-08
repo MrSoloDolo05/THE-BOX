@@ -147,6 +147,7 @@ function createDefaultState() {
             {
                 id: generateId(),
                 name: "UNSORTED",
+                isSystem: true,
 
                 modified:
                     new Date().toISOString()
@@ -171,6 +172,36 @@ function createDefaultState() {
            device can never undo one. */
         purgedRecordIds: {}
     };
+}
+
+
+function getUnsortedFolder(folders) {
+    const collection =
+        Array.isArray(folders)
+            ? folders
+            : state.folders;
+
+    return collection.find(
+        folder =>
+            folder &&
+            folder.isSystem === true
+    ) || collection.find(
+        folder =>
+            folder &&
+            folder.name === "UNSORTED"
+    ) || null;
+}
+
+
+function isUnsortedFolder(folder) {
+    const unsorted =
+        getUnsortedFolder();
+
+    return !!(
+        folder &&
+        unsorted &&
+        folder.id === unsorted.id
+    );
 }
 
 
@@ -312,10 +343,29 @@ function loadState() {
             state.folders.push({
                 id: generateId(),
                 name: "UNSORTED",
+                isSystem: true,
 
                 modified:
                     new Date().toISOString()
             });
+        }
+
+
+        let unsortedFolder =
+            getUnsortedFolder(state.folders);
+
+        if (!unsortedFolder) {
+            unsortedFolder = {
+                id: generateId(),
+                name: "UNSORTED",
+                isSystem: true,
+                modified:
+                    new Date().toISOString()
+            };
+
+            state.folders.unshift(
+                unsortedFolder
+            );
         }
 
 
@@ -340,6 +390,9 @@ function loadState() {
             ) {
                 folder.name = "UNSORTED";
             }
+
+            folder.isSystem =
+                folder.id === unsortedFolder.id;
 
             return;
         });
@@ -385,10 +438,7 @@ function loadState() {
 
             if (!song.folder) {
                 const unsorted =
-                    state.folders.find(
-                        folder =>
-                            folder.name === "UNSORTED"
-                    );
+                    getUnsortedFolder();
 
                 if (unsorted) {
                     song.folder = unsorted.id;
@@ -531,6 +581,13 @@ function migrateSyncMetadata(targetState) {
         targetState.deletedRecordIds = {};
     }
 
+    if (
+        !targetState.purgedRecordIds ||
+        typeof targetState.purgedRecordIds !== "object"
+    ) {
+        targetState.purgedRecordIds = {};
+    }
+
     const fallback =
         targetState.updatedAt ||
         new Date().toISOString();
@@ -578,15 +635,20 @@ function migrateSyncMetadata(targetState) {
     });
 
 
-    /* A tombstone against the UNSORTED folder would delete the one
-       folder the application guarantees to have. */
+    /* The system folder can never be a deletion or purge target. */
     const unsortedFolder =
         (targetState.folders || []).find(
-            folder => folder && folder.name === "UNSORTED"
+            folder =>
+                folder &&
+                (
+                    folder.isSystem === true ||
+                    folder.name === "UNSORTED"
+                )
         );
 
     if (unsortedFolder) {
         delete targetState.deletedRecordIds[unsortedFolder.id];
+        delete targetState.purgedRecordIds[unsortedFolder.id];
     }
 
     return targetState;
@@ -599,28 +661,95 @@ function migrateSyncMetadata(targetState) {
 
 function clearDatabase() {
 
-    localStorage.removeItem(
-        DATABASE_KEY
+    const unsortedFolder =
+        getUnsortedFolder() ||
+        createDefaultState().folders[0];
+
+    clearTimeout(lyricsSaveTimer);
+    clearTimeout(titleSaveTimer);
+    lyricsSaveTimer = null;
+    titleSaveTimer = null;
+    setLiveEdit(false);
+    consumeRenderDeferred();
+
+    SYNC_LIVE_COLLECTIONS.forEach(
+        collection => {
+            (state[collection] || []).forEach(record => {
+                if (
+                    record &&
+                    record.id &&
+                    !(
+                        collection === "folders" &&
+                        isUnsortedFolder(record)
+                    )
+                ) {
+                    markRecordDeleted(record.id);
+
+                    if (
+                        collection === "songs" &&
+                        typeof dropLocalEditsForSong === "function"
+                    ) {
+                        dropLocalEditsForSong(record.id);
+                    }
+                }
+            });
+        }
     );
 
-    state = createDefaultState();
+    state.trash.forEach(item => {
+        if (
+            item &&
+            item.data &&
+            item.data.id &&
+            !(
+                item.type === "folder" &&
+                (
+                    item.data.isSystem === true ||
+                    item.data.name === "UNSORTED" ||
+                    item.data.id === unsortedFolder.id
+                )
+            )
+        ) {
+            purgeRecord(item.data.id);
+        }
+    });
 
-    /* Drop this device's sync baseline too: it describes a
-       library that no longer exists, and a stale baseline would
-       make the next merge resurrect deleted records. */
-    clearSyncBaseline();
+    const deletedRecordIds =
+        Object.assign(
+            {},
+            state.deletedRecordIds
+        );
+
+    const purgedRecordIds =
+        Object.assign(
+            {},
+            state.purgedRecordIds
+        );
+
+    delete deletedRecordIds[unsortedFolder.id];
+    delete purgedRecordIds[unsortedFolder.id];
+
+    unsortedFolder.name = "UNSORTED";
+    unsortedFolder.isSystem = true;
+    touchRecord(unsortedFolder);
+
+    state = createDefaultState();
+    state.folders = [unsortedFolder];
+    state.deletedRecordIds = deletedRecordIds;
+    state.purgedRecordIds = purgedRecordIds;
 
     currentSongId = null;
     currentSectionId = null;
     currentFolderId = null;
 
-    /* Bump the revision and push the cleared state so the
-       cloud document also resets. Without this, a stale
-       higher-revision cloud snapshot would win the next
-       merge and resurrect everything the user deleted. */
+    /* Keep deletion markers in the saved state so the per-record
+       cloud merge cannot bring cleared records back. */
     saveState();
 
     renderAll();
+    if (typeof renderRedRoom === "function") {
+        renderRedRoom();
+    }
     showView("crate");
 }
 
@@ -664,6 +793,120 @@ function exportDatabase() {
     link.remove();
 
     URL.revokeObjectURL(url);
+}
+
+
+function safeExportFilename(value, fallback) {
+    return String(value || "")
+        .trim()
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+        .replace(/\s+/g, " ")
+        .slice(0, 80) || fallback;
+}
+
+
+function downloadTextFile(filename, text) {
+    const blob =
+        new Blob(
+            [text],
+            {
+                type: "text/plain;charset=utf-8"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    const link =
+        document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+
+function exportSongAsText(songId) {
+    const song =
+        state.songs.find(
+            item =>
+                item.id === songId
+        );
+
+    if (!song) {
+        return;
+    }
+
+    const title =
+        String(song.title || "").trim() ||
+        "Untitled Song";
+
+    const sections =
+        (Array.isArray(song.sections) ? song.sections : [])
+            .map(section => {
+                const label =
+                    String(
+                        section.name ||
+                        section.type ||
+                        "SECTION"
+                    ).trim();
+
+                return `${label}\n${String(section.lyrics || "").trim()}`;
+            });
+
+    const text =
+        [
+            `TITLE: ${title}`,
+            ...sections
+        ].join("\n\n");
+
+    downloadTextFile(
+        `${safeExportFilename(title, "untitled-song")}.txt`,
+        text
+    );
+}
+
+
+function exportOneLinerAsText(itemId, kind) {
+    const items =
+        kind === "lines"
+            ? state.liners
+            : kind === "verses"
+                ? state.verses
+                : null;
+
+    if (!items) {
+        return;
+    }
+
+    const item =
+        items.find(
+            record =>
+                record.id === itemId
+        );
+
+    if (!item) {
+        return;
+    }
+
+    const prefix =
+        kind === "lines"
+            ? "one-liner"
+            : "verse";
+
+    const name =
+        safeExportFilename(
+            item.text,
+            `${prefix}-${item.id}`
+        );
+
+    downloadTextFile(
+        `${name}.txt`,
+        String(item.text || "")
+    );
 }
 
 
@@ -750,6 +993,18 @@ function importDatabase(event) {
                 imported.verses = [];
             }
 
+            if (
+                typeof stageCloudStateReplacement ===
+                    "function" &&
+                !stageCloudStateReplacement()
+            ) {
+                alert(
+                    "The backup could not be prepared for sync. " +
+                    "The current database was not changed."
+                );
+                return;
+            }
+
             state = imported;
 
             /* Run migration logic again */
@@ -761,7 +1016,7 @@ function importDatabase(event) {
                device's sync baseline is meaningless afterwards. */
             clearSyncBaseline();
 
-            saveState();
+            saveState({ silent: true });
 
             currentSongId = null;
             currentSectionId = null;
@@ -769,13 +1024,68 @@ function importDatabase(event) {
 
             loadState();
 
+            clearTimeout(cloudPushTimer);
+            cloudPushTimer = null;
+
+            /* A restored backup is the authoritative library, not a
+               set of local edits to merge into the old cloud copy. */
+            const importedAt =
+                new Date().toISOString();
+
+            SYNC_LIVE_COLLECTIONS.forEach(
+                collection => {
+                    state[collection].forEach(record => {
+                        record.modified = importedAt;
+                    });
+                }
+            );
+
+            state.trash.forEach(item => {
+                item.modified = importedAt;
+            });
+
+            saveState({ silent: true });
+
             renderAll();
 
             showView("crate");
 
-            alert(
-                "Database imported successfully."
-            );
+            if (
+                typeof replaceCloudStateAfterImport ===
+                    "function" &&
+                isSignedIn()
+            ) {
+                replaceCloudStateAfterImport()
+                    .then(synced => {
+                        if (synced) {
+                            startListening();
+                            alert(
+                                "Database imported and synced successfully."
+                            );
+                        } else {
+                            alert(
+                                "Database imported on this device. " +
+                                "Cloud sync is pending and will retry " +
+                                "when a connection is available."
+                            );
+                        }
+                    })
+                    .catch(error => {
+                        console.error(
+                            "Could not sync imported database:",
+                            error
+                        );
+                        alert(
+                            "Database imported on this device. " +
+                            "Cloud sync is pending and will retry " +
+                            "when a connection is available."
+                        );
+                    });
+            } else {
+                alert(
+                    "Database imported on this device. Sign in to sync it."
+                );
+            }
 
         } catch (error) {
 

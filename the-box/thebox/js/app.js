@@ -2,6 +2,26 @@
    APP
 ========================================================= */
 
+let appToastTimer = null;
+
+function showToast(message) {
+    const toast =
+        document.getElementById("app-toast");
+
+    if (!toast) {
+        console.error("Could not show notification: #app-toast is missing.");
+        return;
+    }
+
+    toast.textContent = message;
+    toast.classList.add("visible");
+
+    clearTimeout(appToastTimer);
+    appToastTimer = setTimeout(() => {
+        toast.classList.remove("visible");
+    }, 2600);
+}
+
 
 /* =========================================================
    VIEW MANAGEMENT
@@ -1147,40 +1167,6 @@ function setupIntro() {
             enterApp
         );
     }
-
-
-    /* Allow the auth button (when visible) to enter the app as
-       well, so the first interaction is consistent across
-       desktop and mobile. */
-    const authButton =
-        document.getElementById(
-            "auth-button"
-        );
-
-    if (authButton) {
-
-        authButton.addEventListener(
-            "click",
-            (event) => {
-
-                /* If Firebase sign-in is in progress, let that
-                   continue; otherwise enter the app immediately
-                   so the intro doesn't block the workspace. */
-                if (
-                    !authButton.classList.contains(
-                        "signed-in"
-                    )
-                ) {
-
-                    /* Only prevent default if we genuinely want
-                       to skip the intro; otherwise allow normal
-                       auth flow. */
-                }
-
-                enterApp();
-            }
-        );
-    }
 }
 
 
@@ -1656,6 +1642,26 @@ function setupLiners() {
 
         delegateClick(
             list,
+            '[data-action="export-item"]',
+            (event, el) => {
+
+                closeOpenLinerMenus();
+
+                const itemId =
+                    el.closest(".liner")
+                        .dataset.itemId;
+
+                exportOneLinerAsText(
+                    itemId,
+                    isLines
+                        ? "lines"
+                        : "verses"
+                );
+            }
+        );
+
+        delegateClick(
+            list,
             '[data-action="delete-item"]',
             (event, el) => {
 
@@ -1864,6 +1870,56 @@ function setupCrate() {
                 );
             }
         );
+
+        folderGrid.addEventListener(
+            "dragover",
+            event => {
+                const folder =
+                    event.target.closest(".folder");
+
+                if (
+                    folder &&
+                    folderGrid.contains(folder)
+                ) {
+                    folderDragOver(event, folder);
+                }
+            }
+        );
+
+        folderGrid.addEventListener(
+            "dragleave",
+            event => {
+                const folder =
+                    event.target.closest(".folder");
+
+                if (
+                    folder &&
+                    folderGrid.contains(folder) &&
+                    !folder.contains(event.relatedTarget)
+                ) {
+                    folderDragLeave(event, folder);
+                }
+            }
+        );
+
+        folderGrid.addEventListener(
+            "drop",
+            event => {
+                const folder =
+                    event.target.closest(".folder");
+
+                if (
+                    folder &&
+                    folderGrid.contains(folder)
+                ) {
+                    folderDrop(
+                        event,
+                        folder,
+                        folder.dataset.folderId
+                    );
+                }
+            }
+        );
     }
 
 
@@ -1933,6 +1989,18 @@ function setupCrate() {
             (event, el) => {
 
                 duplicateSong(
+                    el.closest(".song-row")
+                        .dataset.songId
+                );
+            }
+        );
+
+        delegateClick(
+            songList,
+            '[data-action="export-song"]',
+            (event, el) => {
+
+                exportSongAsText(
                     el.closest(".song-row")
                         .dataset.songId
                 );
@@ -2047,6 +2115,20 @@ function setupCrate() {
 ========================================================= */
 
 function setupRedRoom() {
+
+    initializeRedRoomCardLayout();
+
+    const layoutToggle =
+        document.getElementById(
+            "redroom-layout-toggle"
+        );
+
+    if (layoutToggle) {
+        layoutToggle.addEventListener(
+            "click",
+            toggleRedRoomCardLayout
+        );
+    }
 
     const title =
         document.getElementById(
@@ -2498,20 +2580,6 @@ function setupRedRoom() {
                         "[data-section-name]"
                     )
                     ?.focus();
-            }
-        );
-
-        delegateClick(
-            sectionsContainer,
-            '[data-action="cycle-section-type"]',
-            (event, el) => {
-
-                closeOpenSectionMenus();
-
-                cycleSectionType(
-                    el.closest(".song-section")
-                        .dataset.sectionId
-                );
             }
         );
 
@@ -3070,9 +3138,23 @@ function handleAuthClick() {
     if (!button) return;
 
     if (isSignedIn()) {
-        signOut();
-        button.textContent = "SIGN IN WITH GOOGLE";
-        button.classList.remove("signed-in");
+        button.disabled = true;
+        button.textContent = "SYNCING BEFORE SIGN OUT…";
+
+        signOut()
+            .then(signedOut => {
+                if (!signedOut) {
+                    updateAuthButton();
+                }
+            })
+            .catch(error => {
+                console.error("Could not sign out:", error);
+                updateAuthButton();
+                showToast("SIGN OUT FAILED");
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
     } else {
         button.textContent = "SIGNING IN…";
         signInWithGoogle()

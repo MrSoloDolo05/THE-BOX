@@ -82,16 +82,22 @@ function renderCrate() {
                                 ✎
                             </button>
 
-                            <button
-                                data-action="delete-folder"
-                                title="Delete"
-                                aria-label="Delete ${escapeAttribute(
-                                    folder.name
-                                )}"
-                                type="button"
-                            >
-                                ×
-                            </button>
+                            ${
+                                isUnsortedFolder(folder)
+                                    ? ""
+                                    : `
+                                        <button
+                                            data-action="delete-folder"
+                                            title="Delete"
+                                            aria-label="Delete ${escapeAttribute(
+                                                folder.name
+                                            )}"
+                                            type="button"
+                                        >
+                                            ×
+                                        </button>
+                                    `
+                            }
 
                         </div>
 
@@ -245,6 +251,18 @@ function renderSongRow(
                 </button>
 
                 <button
+                    data-action="export-song"
+                    type="button"
+                    title="Export as text"
+                    aria-label="Export ${escapeAttribute(
+                        song.title ||
+                        "Untitled Song"
+                    )} as text"
+                >
+                    ↓
+                </button>
+
+                <button
                     data-action="delete-song"
                     type="button"
                     title="Delete"
@@ -364,7 +382,7 @@ function deleteFolder(id) {
 
     /* The Unsorted folder is a protected root folder: it can not
        be deleted, cleared, or dragged into trash. */
-    if (folder.name === "UNSORTED") {
+    if (isUnsortedFolder(folder)) {
 
         alert(
             "The Unsorted folder can not be deleted."
@@ -435,10 +453,7 @@ function deleteFolder(id) {
 
     /* Move songs into UNSORTED */
     const unsorted =
-        state.folders.find(
-            folder =>
-                folder.name === "UNSORTED"
-        );
+        getUnsortedFolder();
 
 
     if (unsorted) {
@@ -482,6 +497,8 @@ function deleteFolder(id) {
     renderCrate();
 
     renderTrash();
+
+    showToast("FOLDER REMOVED · SONGS MOVED TO UNSORTED");
 }
 
 
@@ -525,10 +542,7 @@ function openSong(id) {
 function createSong() {
 
     const defaultFolder =
-        state.folders.find(
-            folder =>
-                folder.name === "UNSORTED"
-        ) ||
+        getUnsortedFolder() ||
         state.folders[0];
 
     const song = {
@@ -616,9 +630,23 @@ function duplicateSong(id) {
             JSON.stringify(original)
         );
 
+    const existingSongIds =
+        new Set(
+            state.songs.map(
+                song =>
+                    song.id
+            )
+        );
+
+    let duplicateId =
+        generateId();
+
+    while (existingSongIds.has(duplicateId)) {
+        duplicateId = generateId();
+    }
 
     duplicate.id =
-        generateId();
+        duplicateId;
 
     duplicate.title =
         original.title +
@@ -631,13 +659,35 @@ function duplicateSong(id) {
         new Date().toISOString();
 
 
-    duplicate.sections =
-        duplicate.sections.map(
-            section => ({
-                ...section,
-                id: generateId()
-            })
+    const existingSectionIds =
+        new Set(
+            state.songs.flatMap(
+                song =>
+                    Array.isArray(song.sections)
+                        ? song.sections.map(
+                            section =>
+                                section.id
+                        )
+                        : []
+            )
         );
+
+    duplicate.sections =
+        duplicate.sections.map(section => {
+            let sectionId =
+                generateId();
+
+            while (existingSectionIds.has(sectionId)) {
+                sectionId = generateId();
+            }
+
+            existingSectionIds.add(sectionId);
+
+            return {
+                ...section,
+                id: sectionId
+            };
+        });
 
 
     state.songs.unshift(
@@ -727,6 +777,8 @@ function deleteSong(id) {
     renderCrate();
 
     renderTrash();
+
+    showToast("MOVED TO TRASH");
 }
 
 
@@ -777,7 +829,11 @@ function openMoveSongModal(songId) {
 }
 
 
-function moveSongToFolder(songId, folderId) {
+function moveSongToFolder(
+    songId,
+    folderId,
+    closeAfterMove = true
+) {
 
     const song =
         state.songs.find(
@@ -789,17 +845,43 @@ function moveSongToFolder(songId, folderId) {
         return;
     }
 
+    const destination =
+        state.folders.find(
+            folder =>
+                folder.id === folderId
+        );
+
+    if (!destination) {
+        return;
+    }
+
+    if (song.folder === folderId) {
+        if (closeAfterMove) {
+            closeModal();
+        }
+
+        return;
+    }
+
     song.folder = folderId;
 
     touchSong(song);
 
     saveState();
 
-    closeModal();
+    if (closeAfterMove) {
+        closeModal();
+    }
 
     renderCrate();
 
     renderFolderSongsIfNeeded();
+
+    showToast(
+        isUnsortedFolder(destination)
+            ? "REMOVED FROM FOLDER"
+            : `MOVED TO ${destination.name}`
+    );
 }
 
 
@@ -845,7 +927,14 @@ function folderDrop(
     );
 
 
-    if (!draggedSongId) {
+    const songId =
+        (
+            event.dataTransfer &&
+            event.dataTransfer.getData("text/plain")
+        ) ||
+        draggedSongId;
+
+    if (!songId) {
         return;
     }
 
@@ -854,7 +943,7 @@ function folderDrop(
         state.songs.find(
             song =>
                 song.id ===
-                draggedSongId
+                songId
         );
 
 
@@ -866,20 +955,12 @@ function folderDrop(
     }
 
 
-    song.folder =
-        folderId;
-
-
-    touchSong(song);
-
-
     draggedSongId = null;
-
-    saveState();
-
-    renderCrate();
-
-    renderFolderSongsIfNeeded();
+    moveSongToFolder(
+        song.id,
+        folderId,
+        false
+    );
 }
 
 
@@ -1175,7 +1256,7 @@ function saveFolderRename(id) {
 
     /* The Unsorted folder is protected: it cannot be renamed
        and it cannot be effectively removed by making it blank. */
-    if (folder.name === "UNSORTED") {
+    if (isUnsortedFolder(folder)) {
 
         alert(
             "The Unsorted folder cannot be renamed."
@@ -1256,7 +1337,10 @@ function renderTrash() {
                 ) {
 
                     name =
-                        item.data.title;
+                        String(
+                            item.data.title || ""
+                        ).trim() ||
+                        "Untitled Song";
 
                 } else if (
                     item.type === "folder"
@@ -1404,7 +1488,11 @@ function restoreTrash(id) {
            without creating a second copy or re-trashing it. */
         if (
             item.data &&
-            item.data.name === "UNSORTED"
+            (
+                item.data.isSystem === true ||
+                item.data.name === "UNSORTED" ||
+                isUnsortedFolder(item.data)
+            )
         ) {
 
             /* The Unsorted folder must never carry a deletion
@@ -1587,6 +1675,33 @@ function permanentlyDelete(id) {
                 item.id === id
         );
 
+    if (
+        doomed &&
+        doomed.type === "folder" &&
+        doomed.data &&
+        (
+            doomed.data.isSystem === true ||
+            doomed.data.name === "UNSORTED" ||
+            state.folders.some(
+                folder =>
+                    folder.id === doomed.data.id &&
+                    isUnsortedFolder(folder)
+            )
+        )
+    ) {
+        state.trash =
+            state.trash.filter(
+                item =>
+                    item.id !== id
+            );
+
+        unmarkRecordDeleted(doomed.data.id);
+        saveState();
+        renderTrash();
+        renderCrate();
+        return;
+    }
+
     state.trash =
         state.trash.filter(
             item =>
@@ -1648,7 +1763,20 @@ function emptyTrash() {
 
         forgetLocalEditsFor(item);
 
-        if (item && item.data && item.data.id) {
+        if (
+            item &&
+            item.data &&
+            item.data.id &&
+            !(
+                item.type === "folder" &&
+                (
+                    item.data.isSystem === true ||
+                    item.data.name === "UNSORTED" ||
+                    item.data.id ===
+                        getUnsortedFolder()?.id
+                )
+            )
+        ) {
             purgeRecord(
                 item.data.id
             );

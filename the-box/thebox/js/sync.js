@@ -22,6 +22,12 @@ let firebaseUnsubscribe = null;
 let currentUser = null;
 let syncStatus = "offline";
 let lastPushedSignature = null;
+const SYNC_REPLACEMENT_KEY =
+    "the_box_pending_cloud_replacement";
+const SYNC_APPLIED_REPLACEMENT_KEY =
+    "the_box_applied_cloud_replacement";
+let cloudReplacementInFlight = null;
+let onlineSyncRetryBound = false;
 
 
 /* =========================================================
@@ -83,6 +89,392 @@ function isSignedIn() {
     return currentUser !== null;
 }
 
+function readPendingCloudReplacement() {
+    let raw;
+
+    try {
+        raw = localStorage.getItem(SYNC_REPLACEMENT_KEY);
+    } catch (error) {
+        console.error(
+            "Could not read the pending cloud replacement:",
+            error
+        );
+        return false;
+    }
+
+    if (!raw) {
+        return null;
+    }
+
+    try {
+        const pending = JSON.parse(raw);
+
+        if (
+            !pending ||
+            typeof pending !== "object" ||
+            typeof pending.replacementId !== "string" ||
+            (
+                pending.userId !== null &&
+                typeof pending.userId !== "string"
+            )
+        ) {
+            throw new Error("Invalid pending replacement metadata.");
+        }
+
+        return pending;
+    } catch (error) {
+        console.error(
+            "The pending cloud replacement metadata is invalid:",
+            error
+        );
+        return false;
+    }
+}
+
+function stageCloudStateReplacement() {
+    const pending = {
+        userId:
+            currentUser && currentUser.uid
+                ? currentUser.uid
+                : null,
+        replacementId: generateId()
+    };
+
+    try {
+        localStorage.setItem(
+            SYNC_REPLACEMENT_KEY,
+            JSON.stringify(pending)
+        );
+        return true;
+    } catch (error) {
+        console.error(
+            "Could not stage the imported database for cloud sync:",
+            error
+        );
+        return false;
+    }
+}
+
+function readAppliedCloudReplacement() {
+    let raw;
+
+    try {
+        raw = localStorage.getItem(
+            SYNC_APPLIED_REPLACEMENT_KEY
+        );
+    } catch (error) {
+        console.error(
+            "Could not read the applied cloud replacement marker:",
+            error
+        );
+        return false;
+    }
+
+    if (!raw) {
+        return null;
+    }
+
+    try {
+        const applied = JSON.parse(raw);
+
+        if (
+            !applied ||
+            typeof applied.userId !== "string" ||
+            typeof applied.replacementId !== "string"
+        ) {
+            throw new Error("Invalid applied replacement metadata.");
+        }
+
+        return applied;
+    } catch (error) {
+        console.error(
+            "The applied cloud replacement marker is invalid:",
+            error
+        );
+        return false;
+    }
+}
+
+function markCloudReplacementApplied(replacementId) {
+    try {
+        localStorage.setItem(
+            SYNC_APPLIED_REPLACEMENT_KEY,
+            JSON.stringify({
+                userId: currentUser.uid,
+                replacementId: replacementId
+            })
+        );
+        return true;
+    } catch (error) {
+        console.error(
+            "Could not save the applied cloud replacement marker:",
+            error
+        );
+        return false;
+    }
+}
+
+function hasUnseenCloudReplacement(data) {
+    if (
+        !data ||
+        typeof data.replacementId !== "string" ||
+        !data.replacementId
+    ) {
+        return false;
+    }
+
+    const applied =
+        readAppliedCloudReplacement();
+
+    if (applied === false) {
+        return true;
+    }
+
+    return !(
+        applied &&
+        applied.userId === currentUser.uid &&
+        applied.replacementId === data.replacementId
+    );
+}
+
+/* A full restore is authoritative once; peers must not merge stale
+   local tombstones or purge markers back into that imported snapshot. */
+function adoptAuthoritativeCloudReplacement(data) {
+    if (!data || !data.state) {
+        return false;
+    }
+
+    clearTimeout(lyricsSaveTimer);
+    clearTimeout(titleSaveTimer);
+    lyricsSaveTimer = null;
+    titleSaveTimer = null;
+    setLiveEdit(false);
+    consumeRenderDeferred();
+
+    if (typeof dropLocalEditsForSong === "function") {
+        state.songs.forEach(song => {
+            dropLocalEditsForSong(song.id);
+        });
+    }
+
+    currentSongId = null;
+    currentSectionId = null;
+    currentFolderId = null;
+
+    const importedState =
+        captureSyncState(data.state);
+
+    adoptMergedState(importedState);
+    if (typeof renderRedRoom === "function") {
+        renderRedRoom();
+    }
+    if (typeof showView === "function") {
+        showView("crate");
+    }
+
+    setSyncBaseline(
+        buildSyncBaseline(importedState)
+    );
+    rememberSyncedSignature(importedState);
+    const markerSaved =
+        markCloudReplacementApplied(data.replacementId);
+
+    setSyncStatus(
+        markerSaved
+            ? "synced"
+            : "error"
+    );
+    return true;
+}
+
+function clearPendingCloudReplacement() {
+    try {
+        localStorage.removeItem(SYNC_REPLACEMENT_KEY);
+        return true;
+    } catch (error) {
+        console.error(
+            "Could not clear the pending cloud replacement:",
+            error
+        );
+        return false;
+    }
+}
+
+async function replaceCloudStateAfterImport() {
+    if (cloudReplacementInFlight) {
+        return cloudReplacementInFlight;
+    }
+
+    cloudReplacementInFlight = (async () => {
+        if (!isSignedIn()) {
+            return false;
+        }
+
+        const pending =
+            readPendingCloudReplacement();
+
+        if (!pending) {
+            return pending === null;
+        }
+
+        if (
+            pending.userId &&
+            pending.userId !== currentUser.uid
+        ) {
+            console.error(
+                "The imported database is staged for a different signed-in account."
+            );
+            setSyncStatus("error");
+            return false;
+        }
+
+        const docRef = getUserDocRef();
+
+        if (!docRef) {
+            setSyncStatus("error");
+            return false;
+        }
+
+        if (pushInFlight) {
+            await pushInFlight.task;
+        }
+
+        try {
+            const importedState =
+                captureSyncState(
+                    JSON.parse(JSON.stringify(state))
+                );
+
+            stopListening();
+            setSyncStatus("syncing");
+
+            await firebaseDb.runTransaction(
+                async transaction => {
+                    await transaction.get(docRef);
+
+                    transaction.set(
+                        docRef,
+                        {
+                            state: importedState,
+                            replacementId:
+                                pending.replacementId,
+                            updatedAt:
+                                firebase.firestore.FieldValue.serverTimestamp()
+                        },
+                        { merge: true }
+                    );
+                }
+            );
+
+            setSyncBaseline(
+                buildSyncBaseline(importedState)
+            );
+            rememberSyncedSignature(importedState);
+            markCloudReplacementApplied(
+                pending.replacementId
+            );
+
+            if (!clearPendingCloudReplacement()) {
+                setSyncStatus("error");
+                return false;
+            }
+
+            setSyncStatus("synced");
+            return true;
+        } catch (error) {
+            console.error(
+                "Could not replace the cloud database with the imported backup:",
+                error
+            );
+            setSyncStatus("error");
+            return false;
+        }
+    })();
+
+    try {
+        return await cloudReplacementInFlight;
+    } finally {
+        cloudReplacementInFlight = null;
+    }
+}
+
+function bindOnlineSyncRetry() {
+    if (
+        onlineSyncRetryBound ||
+        typeof window.addEventListener !== "function"
+    ) {
+        return;
+    }
+
+    window.addEventListener("online", () => {
+        if (isSignedIn()) {
+            pushState();
+        }
+    });
+
+    onlineSyncRetryBound = true;
+}
+
+function hasLocalSyncedWorkspace() {
+    try {
+        return localStorage.getItem(SYNC_BASELINE_KEY) !== null;
+    } catch (error) {
+        console.error(
+            "Could not check for a previously synced local workspace:",
+            error
+        );
+
+        return true;
+    }
+}
+
+function clearSignedOutWorkspace() {
+    let localDataCleared = true;
+
+    [
+        DATABASE_KEY,
+        SYNC_BASELINE_KEY,
+        UI_STATE_KEY
+    ].forEach(key => {
+        try {
+            localStorage.removeItem(key);
+        } catch (error) {
+            localDataCleared = false;
+            console.error(
+                `Could not clear local data key "${key}" after sign out:`,
+                error
+            );
+        }
+    });
+
+    if (typeof dropLocalEditsForSong === "function") {
+        state.songs.forEach(song => {
+            dropLocalEditsForSong(song.id);
+        });
+    }
+
+    state = createDefaultState();
+    clearTimeout(lyricsSaveTimer);
+    clearTimeout(titleSaveTimer);
+    lyricsSaveTimer = null;
+    titleSaveTimer = null;
+    setLiveEdit(false);
+    consumeRenderDeferred();
+    currentSongId = null;
+    currentSectionId = null;
+    currentFolderId = null;
+
+    if (typeof renderRedRoom === "function") {
+        renderRedRoom();
+    }
+
+    renderAll();
+    showView("crate");
+    saveUIState();
+
+    return localDataCleared;
+}
+
 
 /* =========================================================
    AUTH
@@ -92,6 +484,8 @@ async function initAuth() {
     if (!firebaseAuth) {
         return;
     }
+
+    bindOnlineSyncRetry();
 
     /* The app now requires manual login triggers. On load we
        only observe the Firebase auth state and update the UI;
@@ -106,7 +500,12 @@ async function initAuth() {
                 setSyncStatus("syncing");
 
                 try {
-                    await pullState();
+                    const pulled =
+                        await pullState();
+
+                    if (!pulled) {
+                        return;
+                    }
                 } catch (error) {
                     console.error(
                         "Auth state pull failed:",
@@ -119,10 +518,24 @@ async function initAuth() {
 
             } else {
 
+                const hadSignedInUser =
+                    currentUser !== null;
+
                 currentUser = null;
                 updateAuthButton();
                 stopListening();
                 setSyncStatus("offline");
+
+                if (
+                    hadSignedInUser ||
+                    hasLocalSyncedWorkspace()
+                ) {
+                    if (!clearSignedOutWorkspace()) {
+                        showToast(
+                            "SIGNED OUT — LOCAL DATA COULD NOT BE CLEARED"
+                        );
+                    }
+                }
             }
         }
     );
@@ -141,7 +554,13 @@ async function signInWithGoogle() {
         updateAuthButton();
 
         setSyncStatus("syncing");
-        await pullState();
+        const pulled =
+            await pullState();
+
+        if (!pulled) {
+            return result.user;
+        }
+
         startListening();
         setSyncStatus("synced");
 
@@ -155,13 +574,39 @@ async function signInWithGoogle() {
 }
 
 async function signOut() {
-    if (!firebaseAuth) return;
+    if (!firebaseAuth || !isSignedIn()) return false;
 
-    stopListening();
-    await firebaseAuth.signOut();
+    const synced =
+        await flushCloudPush();
+
+    if (!synced) {
+        setSyncStatus("error");
+        showToast("SIGN OUT BLOCKED — SYNC DID NOT COMPLETE");
+        return false;
+    }
+
+    try {
+        stopListening();
+        await firebaseAuth.signOut();
+    } catch (error) {
+        console.error("Sign out failed:", error);
+        setSyncStatus("error");
+        showToast("SIGN OUT FAILED");
+        return false;
+    }
+
     currentUser = null;
     updateAuthButton();
     setSyncStatus("offline");
+
+    const localDataCleared =
+        clearSignedOutWorkspace();
+
+    if (!localDataCleared) {
+        showToast("SIGNED OUT — LOCAL DATA COULD NOT BE CLEARED");
+    }
+
+    return true;
 }
 
 /* =========================================================
@@ -222,10 +667,29 @@ const followUpPushGuard = {
 
 
 async function pushState() {
-    if (!isSignedIn()) return;
+    if (!isSignedIn()) return false;
+
+    const pendingReplacement =
+        readPendingCloudReplacement();
+    const replacedPendingCloudState =
+        Boolean(pendingReplacement);
+
+    if (pendingReplacement === false) {
+        setSyncStatus("error");
+        return false;
+    }
+
+    if (pendingReplacement) {
+        const replaced =
+            await replaceCloudStateAfterImport();
+
+        if (!replaced) {
+            return false;
+        }
+    }
 
     const docRef = getUserDocRef();
-    if (!docRef) return;
+    if (!docRef) return false;
 
     if (pushInFlight) {
 
@@ -281,24 +745,68 @@ async function pushState() {
             }
 
             setSyncStatus("synced");
+            return true;
 
         } catch (error) {
 
             console.error("Push failed:", error);
             setSyncStatus("error");
+            return false;
         }
     })();
 
     pushInFlight = { task };
 
-    await task;
+    let succeeded =
+        await task;
 
     pushInFlight = null;
 
     if (pushPending) {
         pushPending = false;
-        await pushState();
+        succeeded =
+            (await pushState()) &&
+            succeeded;
     }
+
+    if (succeeded && replacedPendingCloudState) {
+        startListening();
+    }
+
+    return succeeded;
+}
+
+
+async function flushCloudPush() {
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = null;
+
+    if (!isSignedIn()) {
+        return false;
+    }
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const succeeded =
+            await pushState();
+
+        if (!succeeded) {
+            return false;
+        }
+
+        if (
+            !pushInFlight &&
+            !pushPending &&
+            lastPushedSignature === stateDigest(state)
+        ) {
+            return true;
+        }
+    }
+
+    console.error(
+        "Could not confirm that the local state finished syncing before sign out."
+    );
+
+    return false;
 }
 
 
@@ -316,6 +824,7 @@ async function runPushTransaction(docRef) {
         captureSyncState(state);
 
     let mergedState = null;
+    let authoritativeReplacementId = null;
 
     await firebaseDb.runTransaction(async (transaction) => {
 
@@ -333,6 +842,30 @@ async function runPushTransaction(docRef) {
                 ? cloudData.state
                 : null;
 
+        if (
+            cloudData &&
+            hasUnseenCloudReplacement(cloudData)
+        ) {
+            mergedState =
+                captureSyncState(cloudState);
+            authoritativeReplacementId =
+                cloudData.replacementId;
+
+            transaction.set(
+                docRef,
+                {
+                    state: cloudState,
+                    replacementId:
+                        authoritativeReplacementId,
+                    updatedAt:
+                        firebase.firestore.FieldValue.serverTimestamp()
+                },
+                { merge: true }
+            );
+
+            return;
+        }
+
         mergedState = mergeSyncState(
             localSnapshot,
             cloudState,
@@ -349,6 +882,14 @@ async function runPushTransaction(docRef) {
             { merge: true }
         );
     });
+
+    if (authoritativeReplacementId) {
+        adoptAuthoritativeCloudReplacement({
+            state: mergedState,
+            replacementId: authoritativeReplacementId
+        });
+        return;
+    }
 
     /* The cloud now holds exactly mergedState, so echo suppression
        and the merge baseline must describe THAT document. */
@@ -419,31 +960,55 @@ async function runPushTransaction(docRef) {
 }
 
 async function pullState() {
-    if (!isSignedIn()) return;
+    if (!isSignedIn()) return false;
+
+    const pendingReplacement =
+        readPendingCloudReplacement();
+
+    if (pendingReplacement === false) {
+        setSyncStatus("error");
+        return false;
+    }
+
+    if (pendingReplacement) {
+        const replaced =
+            await replaceCloudStateAfterImport();
+
+        if (!replaced) {
+            return false;
+        }
+    }
 
     const docRef = getUserDocRef();
-    if (!docRef) return;
+    if (!docRef) return false;
 
     try {
         setSyncStatus("syncing");
 
         const doc = await docRef.get({ source: "server" });
 
-        const cloudState =
+        const cloudData =
             doc.exists &&
             doc.data() &&
             doc.data().state
-                ? doc.data().state
+                ? doc.data()
+                : null;
+
+        if (hasUnseenCloudReplacement(cloudData)) {
+            return adoptAuthoritativeCloudReplacement(
+                cloudData
+            );
+        }
+
+        const cloudState =
+            cloudData
+                ? cloudData.state
                 : null;
 
         if (!cloudState) {
 
             /* First time this account has ever synced. */
-            await pushState();
-
-            setSyncStatus("synced");
-
-            return;
+            return await pushState();
         }
 
         const mergedState = mergeSyncState(
@@ -465,8 +1030,7 @@ async function pullState() {
             stateDigest(mergedState) !==
             stateDigest(cloudState)
         ) {
-            await pushState();
-            return;
+            return await pushState();
         }
 
         rememberSyncedSignature(cloudState);
@@ -476,10 +1040,12 @@ async function pullState() {
         );
 
         setSyncStatus("synced");
+        return true;
 
     } catch (error) {
         console.error("Pull failed:", error);
         setSyncStatus("error");
+        return false;
     }
 }
 
@@ -1098,6 +1664,29 @@ function mergeSyncState(localRaw, cloudRaw, baseline) {
     const purges =
         collectPurges(local, cloud, baseline);
 
+    const protectedUnsortedIds =
+        new Set(
+            [
+                ...(local.folders || []),
+                ...(cloud.folders || []),
+                ...(merged.folders || [])
+            ]
+                .filter(
+                    folder =>
+                        folder &&
+                        (
+                            folder.isSystem === true ||
+                            folder.name === "UNSORTED"
+                        )
+                )
+                .map(folder => folder.id)
+        );
+
+    protectedUnsortedIds.forEach(id => {
+        delete tombstones[id];
+        delete purges[id];
+    });
+
     const removed = {};
 
     SYNC_LIVE_COLLECTIONS.forEach(collection => {
@@ -1343,6 +1932,7 @@ function finalizeMergedState(merged) {
         merged.folders.push({
             id: generateId(),
             name: "UNSORTED",
+            isSystem: true,
 
             modified:
                 merged.updatedAt ||
@@ -1350,12 +1940,46 @@ function finalizeMergedState(merged) {
         });
     }
 
-    /* If two devices each created their own UNSORTED folder they
-       both survive the merge. Collapse them deterministically by
-       keeping the lowest id, so every device picks the same one. */
+    let unsortedFolder =
+        merged.folders.find(
+            folder =>
+                folder &&
+                folder.isSystem === true
+        ) ||
+        merged.folders.find(
+            folder =>
+                folder &&
+                folder.name === "UNSORTED"
+        );
+
+    if (!unsortedFolder) {
+        unsortedFolder = {
+            id: generateId(),
+            name: "UNSORTED",
+            isSystem: true,
+            modified:
+                merged.updatedAt ||
+                new Date().toISOString()
+        };
+
+        merged.folders.push(unsortedFolder);
+    }
+
+    unsortedFolder.name = "UNSORTED";
+
+    merged.folders.forEach(folder => {
+        folder.isSystem =
+            folder.id === unsortedFolder.id;
+    });
+
+    /* Collapse legacy duplicate system folders deterministically. */
     const unsortedIds =
         merged.folders
-            .filter(folder => folder.name === "UNSORTED")
+            .filter(
+                folder =>
+                    folder.isSystem === true ||
+                    folder.name === "UNSORTED"
+            )
             .map(folder => folder.id)
             .sort();
 
@@ -1363,6 +1987,15 @@ function finalizeMergedState(merged) {
 
         const keep = unsortedIds[0];
         const drop = new Set(unsortedIds.slice(1));
+        const keeper =
+            merged.folders.find(
+                folder => folder.id === keep
+            );
+
+        if (keeper) {
+            keeper.name = "UNSORTED";
+            keeper.isSystem = true;
+        }
 
         merged.folders =
             merged.folders.filter(
@@ -1384,7 +2017,9 @@ function finalizeMergedState(merged) {
 
     const fallback =
         merged.folders.find(
-            folder => folder.name === "UNSORTED"
+            folder =>
+                folder.isSystem === true ||
+                folder.name === "UNSORTED"
         ) || merged.folders[0];
 
     /* Never let a song point at a folder that no longer exists.
@@ -1400,7 +2035,10 @@ function finalizeMergedState(merged) {
        merge would delete the only guaranteed folder. */
     if (
         fallback &&
-        fallback.name === "UNSORTED" &&
+        (
+            fallback.isSystem === true ||
+            fallback.name === "UNSORTED"
+        ) &&
         merged.deletedRecordIds[fallback.id]
     ) {
         delete merged.deletedRecordIds[fallback.id];
@@ -1411,7 +2049,10 @@ function finalizeMergedState(merged) {
 
             if (
                 fallback &&
-                fallback.name === "UNSORTED" &&
+                (
+                    fallback.isSystem === true ||
+                    fallback.name === "UNSORTED"
+                ) &&
                 item &&
                 item.data &&
                 item.data.id === fallback.id
@@ -1562,6 +2203,13 @@ function rememberSyncedSignature(snapshot) {
 function startListening() {
     stopListening();
 
+    bindOnlineSyncRetry();
+
+    if (readPendingCloudReplacement() !== null) {
+        setSyncStatus("error");
+        return;
+    }
+
     const docRef = getUserDocRef();
     if (!docRef) return;
 
@@ -1582,6 +2230,11 @@ function startListening() {
 
             const data = doc.data();
             if (!data || !data.state) return;
+
+            if (hasUnseenCloudReplacement(data)) {
+                adoptAuthoritativeCloudReplacement(data);
+                return;
+            }
 
             const signature =
                 stateDigest(data.state);

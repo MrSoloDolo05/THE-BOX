@@ -2,6 +2,92 @@
    RED ROOM / SONG EDITOR
 ========================================================= */
 
+const RED_ROOM_LAYOUT_KEY =
+    "the_box_red_room_layout";
+
+let redRoomCardLayout = "comfortable";
+
+function applyRedRoomCardLayout() {
+    const view =
+        document.getElementById("view-redroom");
+
+    const toggle =
+        document.getElementById("redroom-layout-toggle");
+
+    if (!view || !toggle) {
+        return;
+    }
+
+    view.dataset.cardLayout =
+        redRoomCardLayout;
+
+    const nextLayout =
+        redRoomCardLayout === "compact"
+            ? "comfortable"
+            : "compact";
+
+    toggle.textContent =
+        nextLayout === "compact"
+            ? "COMPACT CARDS"
+            : "COMFORTABLE CARDS";
+
+    toggle.setAttribute(
+        "aria-pressed",
+        redRoomCardLayout === "compact"
+            ? "true"
+            : "false"
+    );
+
+    toggle.setAttribute(
+        "aria-label",
+        `Card layout is ${redRoomCardLayout}. Switch to ${nextLayout}.`
+    );
+}
+
+function initializeRedRoomCardLayout() {
+    try {
+        const saved =
+            localStorage.getItem(RED_ROOM_LAYOUT_KEY);
+
+        redRoomCardLayout =
+            saved === "compact"
+                ? "compact"
+                : "comfortable";
+    } catch (error) {
+        console.error(
+            "Could not load Red Room card layout:",
+            error
+        );
+
+        redRoomCardLayout = "comfortable";
+    }
+
+    applyRedRoomCardLayout();
+}
+
+function toggleRedRoomCardLayout() {
+    redRoomCardLayout =
+        redRoomCardLayout === "compact"
+            ? "comfortable"
+            : "compact";
+
+    try {
+        localStorage.setItem(
+            RED_ROOM_LAYOUT_KEY,
+            redRoomCardLayout
+        );
+    } catch (error) {
+        console.error(
+            "Could not save Red Room card layout:",
+            error
+        );
+
+        showToast("CARD LAYOUT COULD NOT BE SAVED");
+    }
+
+    applyRedRoomCardLayout();
+}
+
 
 /* =========================================================
    GET CURRENT SONG
@@ -655,14 +741,6 @@ function renderSections(force) {
                                                 role="menuitem"
                                             >
                                                 RENAME
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                data-action="cycle-section-type"
-                                                role="menuitem"
-                                            >
-                                                CHANGE TYPE
                                             </button>
 
                                             <button
@@ -1540,47 +1618,6 @@ function retitleSection(
     saveState();
 }
 
-function changeSectionType(
-    sectionId,
-    nextType
-) {
-
-    flushRedRoomEdits();
-
-    const song =
-        getCurrentSong();
-
-    if (!song) {
-        return;
-    }
-
-    const section =
-        song.sections.find(
-            section =>
-                section.id ===
-                sectionId
-        );
-
-    if (!section) {
-        return;
-    }
-
-    const canonical =
-        String(nextType || "")
-            .trim()
-            .toUpperCase() ||
-        section.type ||
-        "SECTION";
-
-    section.type = canonical;
-
-    touchSong(song);
-
-    saveState();
-
-    structuralRender();
-}
-
 function showSectionUndo() {
 
     const bar =
@@ -1760,15 +1797,6 @@ function exitToCrate() {
    SECTION TYPE MENU (+ SECTION selector)
 ========================================================= */
 
-const SECTION_TYPE_ORDER = [
-    "VERSE",
-    "CHORUS",
-    "PRE-CHORUS",
-    "BRIDGE",
-    "INTRO",
-    "OUTRO"
-];
-
 function toggleSectionTypeMenu() {
 
     const menu =
@@ -1887,48 +1915,6 @@ function addSectionFromMenu(sectionType) {
 
     addSection(
         sectionType
-    );
-}
-
-/* Change type keeps the custom label intact: the visible name
-   only falls back to TYPE + number when no label was set. */
-function cycleSectionType(sectionId) {
-
-    const song =
-        getCurrentSong();
-
-    if (!song) {
-        return;
-    }
-
-    const section =
-        song.sections.find(
-            section =>
-                section.id ===
-                sectionId
-        );
-
-    if (!section) {
-        return;
-    }
-
-    const current =
-        (section.type || "VERSE").toUpperCase();
-
-    const at =
-        SECTION_TYPE_ORDER.indexOf(
-            current
-        );
-
-    const next =
-        SECTION_TYPE_ORDER[
-            (at + 1) %
-            SECTION_TYPE_ORDER.length
-        ] || "VERSE";
-
-    changeSectionType(
-        sectionId,
-        next
     );
 }
 

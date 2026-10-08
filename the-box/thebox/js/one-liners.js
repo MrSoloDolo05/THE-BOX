@@ -573,6 +573,11 @@ function renderLiners() {
                         `
                         : "";
 
+                const exportLabel =
+                    isLines
+                        ? "ONE LINER"
+                        : "VERSE";
+
                 const verseKicker =
                     !isLines
                         ? `
@@ -637,6 +642,14 @@ function renderLiners() {
                                         role="menuitem"
                                     >
                                         EDIT
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        data-action="export-item"
+                                        role="menuitem"
+                                    >
+                                        EXPORT ${exportLabel} AS .TXT
                                     </button>
 
                                     ${insertButton}
@@ -925,6 +938,8 @@ function deleteLiner(id) {
     renderLiners();
 
     renderTrash();
+
+    showToast("MOVED TO TRASH");
 }
 
 
@@ -988,6 +1003,8 @@ function deleteVerse(id) {
     renderLiners();
 
     renderTrash();
+
+    showToast("MOVED TO TRASH");
 }
 
 

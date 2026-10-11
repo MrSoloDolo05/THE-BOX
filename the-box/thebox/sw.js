@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "the-box-app-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 const APP_SHELL = [
     "./index.html",
     "./css/style.css",
@@ -16,16 +16,18 @@ const APP_SHELL = [
     "./js/app.js",
     "./icons/apple-touch-icon.png",
     "./icons/favicon-32.png",
-    "./icons/favicon.svg",
     "./icons/icon-192-v2.png",
     "./icons/icon-192.png",
     "./icons/icon-512-v2.png",
     "./icons/icon-512.png",
     "./icons/maskable-512-v2.png",
     "./icons/maskable-512.png",
-    "./icons/maskable-icon.svg",
-    "./icons/the-box-icon.svg",
-    "./icons/the-box-mark.svg"
+    "./icons/the-box-logo.png",
+    "./icons/the-box-symbol.png",
+    "./icons/apple-touch-icon-v3.png",
+    "./icons/app-icon-192-v3.png",
+    "./icons/app-icon-512-v3.png",
+    "./icons/app-maskable-512-v3.png"
 ];
 const APP_SHELL_PATHS = new Set(
     APP_SHELL.map(path =>

@@ -498,7 +498,7 @@
 
         border-right: 1px solid var(--line);
 
-        background: rgba(0,0,0,.2);
+        background: #000;
         backdrop-filter: blur(25px);
 
         padding: 30px 20px;
@@ -3609,7 +3609,7 @@
     .sidebar {
         color: #e6ebf0;
         border-right-color: rgba(185,202,217,.14);
-        background: rgba(17,25,33,.96);
+        background: #000;
     }
 
     .sidebar .brand-tagline,
